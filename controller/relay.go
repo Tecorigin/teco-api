@@ -124,12 +124,25 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken
+	if promptRaw := service.BuildAuditPromptForRequest(request); promptRaw != "" {
+		common.SetContextKey(c, constant.ContextKeyAuditPromptRaw, promptRaw)
+	} else if originalMeta := request.GetTokenCountMeta(); originalMeta != nil && originalMeta.CombineText != "" {
+		common.SetContextKey(c, constant.ContextKeyAuditPromptRaw, originalMeta.CombineText)
+	}
+	if filterResult := service.ApplyKeywordFilterOnRequest(request); filterResult.Changed {
+		common.SetContextKey(c, constant.ContextKeyAuditKeywordHits, filterResult.Hits)
+	}
 	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.
 	var meta *types.TokenCountMeta
 	if needSensitiveCheck || needCountToken {
 		meta = request.GetTokenCountMeta()
 	} else {
 		meta = fastTokenCountMetaForPricing(request)
+	}
+	if promptFinal := service.BuildAuditPromptForRequest(request); promptFinal != "" {
+		common.SetContextKey(c, constant.ContextKeyAuditPromptFinal, promptFinal)
+	} else if meta != nil && meta.CombineText != "" {
+		common.SetContextKey(c, constant.ContextKeyAuditPromptFinal, meta.CombineText)
 	}
 
 	if needSensitiveCheck && meta != nil {

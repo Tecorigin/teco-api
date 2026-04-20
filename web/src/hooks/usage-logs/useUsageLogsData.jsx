@@ -42,8 +42,9 @@ import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
 import ParamOverrideEntry from '../../components/table/usage-logs/components/ParamOverrideEntry';
 
-export const useLogsData = () => {
+export const useLogsData = ({ mode = 'log' } = {}) => {
   const { t } = useTranslation();
+  const isAuditMode = mode === 'audit';
 
   // Define column keys for selection
   const COLUMN_KEYS = {
@@ -72,7 +73,7 @@ export const useLogsData = () => {
   const [activePage, setActivePage] = useState(1);
   const [logCount, setLogCount] = useState(0);
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
-  const [logType, setLogType] = useState(0);
+  const [logType, setLogType] = useState(isAuditMode ? 2 : 0);
 
   // User and admin
   const isAdminUser = isAdmin();
@@ -104,7 +105,7 @@ export const useLogsData = () => {
       timestamp2string(getTodayStartTimestamp()),
       timestamp2string(now.getTime() / 1000 + 3600),
     ],
-    logType: '0',
+    logType: isAuditMode ? '2' : '0',
   };
 
   // Get default column visibility based on user role
@@ -256,7 +257,11 @@ export const useLogsData = () => {
       channel: formValues.channel || '',
       group: formValues.group || '',
       request_id: formValues.request_id || '',
-      logType: formValues.logType ? parseInt(formValues.logType) : 0,
+      logType: formValues.logType
+        ? parseInt(formValues.logType)
+        : isAuditMode
+          ? 2
+          : 0,
     };
   };
 
@@ -270,7 +275,11 @@ export const useLogsData = () => {
       group,
       logType: formLogType,
     } = getFormValues();
-    const currentLogType = formLogType !== undefined ? formLogType : logType;
+    const currentLogType = isAuditMode
+      ? 2
+      : formLogType !== undefined
+        ? formLogType
+        : logType;
     let localStartTimestamp = Date.parse(start_timestamp) / 1000;
     let localEndTimestamp = Date.parse(end_timestamp) / 1000;
     let url = `/api/log/self/stat?type=${currentLogType}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&group=${group}`;
@@ -295,7 +304,11 @@ export const useLogsData = () => {
       group,
       logType: formLogType,
     } = getFormValues();
-    const currentLogType = formLogType !== undefined ? formLogType : logType;
+    const currentLogType = isAuditMode
+      ? 2
+      : formLogType !== undefined
+        ? formLogType
+        : logType;
     let localStartTimestamp = Date.parse(start_timestamp) / 1000;
     let localEndTimestamp = Date.parse(end_timestamp) / 1000;
     let url = `/api/log/stat?type=${currentLogType}&username=${username}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}&group=${group}`;
@@ -380,6 +393,8 @@ export const useLogsData = () => {
       logs[i].timestamp2string = timestamp2string(logs[i].created_at);
       logs[i].key = logs[i].id;
       let other = getLogOther(logs[i].other);
+      const hasRawOther = typeof logs[i].other === 'string' && logs[i].other !== '';
+      const parseOtherFailed = hasRawOther && other === null;
       let expandDataLocal = [];
 
       if (isAdminUser && (logs[i].type === 0 || logs[i].type === 2 || logs[i].type === 6)) {
@@ -468,10 +483,56 @@ export const useLogsData = () => {
             value: logs[i].content,
           });
         }
+        if (other?.audit_prompt) {
+          expandDataLocal.push({
+            key: t('提问内容'),
+            value: (
+              <div style={{ maxWidth: 720, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6 }}>
+                {other.audit_prompt}
+              </div>
+            ),
+          });
+        }
+        if (other?.audit_reply) {
+          expandDataLocal.push({
+            key: t('回复内容'),
+            value: (
+              <div style={{ maxWidth: 720, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6 }}>
+                {other.audit_reply}
+              </div>
+            ),
+          });
+        }
+        if (other?.audit_keyword_hits && Array.isArray(other.audit_keyword_hits) && other.audit_keyword_hits.length > 0) {
+          expandDataLocal.push({
+            key: t('关键词替换命中'),
+            value: other.audit_keyword_hits.join(', '),
+          });
+        }
+        if (other?.audit_prompt_raw && other.audit_prompt_raw !== other.audit_prompt) {
+          expandDataLocal.push({
+            key: t('替换前提问'),
+            value: (
+              <div style={{ maxWidth: 720, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6 }}>
+                {other.audit_prompt_raw}
+              </div>
+            ),
+          });
+        }
         if (isAdminUser && other?.reject_reason) {
           expandDataLocal.push({
             key: t('拦截原因'),
             value: other.reject_reason,
+          });
+        }
+        if (parseOtherFailed) {
+          expandDataLocal.push({
+            key: t('附加信息(解析失败)'),
+            value: (
+              <div style={{ maxWidth: 720, whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.6 }}>
+                {logs[i].other}
+              </div>
+            ),
           });
         }
       }
@@ -814,8 +875,9 @@ export const useLogsData = () => {
       logType: formLogType,
     } = getFormValues();
 
-    const currentLogType =
-      customLogType !== null
+    const currentLogType = isAuditMode
+      ? 2
+      : customLogType !== null
         ? customLogType
         : formLogType !== undefined
           ? formLogType
@@ -827,6 +889,9 @@ export const useLogsData = () => {
       url = `/api/log/?p=${startIdx}&page_size=${pageSize}&type=${currentLogType}&username=${username}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}&group=${group}&request_id=${request_id}`;
     } else {
       url = `/api/log/self/?p=${startIdx}&page_size=${pageSize}&type=${currentLogType}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&group=${group}&request_id=${request_id}`;
+    }
+    if (isAuditMode) {
+      url += '&audit_only=1';
     }
     url = encodeURI(url);
     const res = await API.get(url);
@@ -863,6 +928,12 @@ export const useLogsData = () => {
 
   // Refresh function
   const refresh = async () => {
+    if (isAuditMode) {
+      setLogType(2);
+      if (formApi) {
+        formApi.setValue('logType', '2');
+      }
+    }
     setActivePage(1);
     handleEyeClick();
     await loadLogs(1, pageSize);
@@ -965,6 +1036,7 @@ export const useLogsData = () => {
     hasExpandableRows,
     setLogType,
     openParamOverrideModal,
+    isAuditMode,
 
     // Translation
     t,

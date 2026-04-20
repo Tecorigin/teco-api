@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -67,8 +68,16 @@ func OaiResponsesToChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 
 	if usage == nil || usage.TotalTokens == 0 {
 		text := service.ExtractOutputTextFromResponses(&responsesResp)
+		if text != "" {
+			common.SetContextKey(c, constant.ContextKeyAuditReplyText, text)
+		}
 		usage = service.ResponseText2Usage(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
 		chatResp.Usage = *usage
+	} else {
+		text := service.ExtractOutputTextFromResponses(&responsesResp)
+		if text != "" {
+			common.SetContextKey(c, constant.ContextKeyAuditReplyText, text)
+		}
 	}
 
 	var responseBody []byte
@@ -517,6 +526,11 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 
 	if usage.TotalTokens == 0 {
 		usage = service.ResponseText2Usage(c, usageText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+	}
+	if outputText.Len() > 0 {
+		common.SetContextKey(c, constant.ContextKeyAuditReplyText, outputText.String())
+	} else if usageText.Len() > 0 {
+		common.SetContextKey(c, constant.ContextKeyAuditReplyText, usageText.String())
 	}
 
 	if !sentStart {

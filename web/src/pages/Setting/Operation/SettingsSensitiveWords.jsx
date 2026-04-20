@@ -34,7 +34,9 @@ export default function SettingsSensitiveWords(props) {
   const [inputs, setInputs] = useState({
     CheckSensitiveEnabled: false,
     CheckSensitiveOnPromptEnabled: false,
+    KeywordFilterEnabled: false,
     SensitiveWords: '',
+    KeywordReplaceRules: '',
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -125,9 +127,24 @@ export default function SettingsSensitiveWords(props) {
                   }
                 />
               </Col>
-            </Row>
-            <Row>
               <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'KeywordFilterEnabled'}
+                  label={t('启用关键词替换')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={(value) =>
+                    setInputs({
+                      ...inputs,
+                      KeywordFilterEnabled: value,
+                    })
+                  }
+                />
+              </Col>
+            </Row>
+            <Row gutter={[16, 16]}>
+              <Col xs={24} sm={24} md={12} lg={12} xl={12}>
                 <Form.TextArea
                   label={t('屏蔽词列表')}
                   extraText={t('一行一个屏蔽词，不需要符号分割')}
@@ -137,6 +154,22 @@ export default function SettingsSensitiveWords(props) {
                     setInputs({
                       ...inputs,
                       SensitiveWords: value,
+                    })
+                  }
+                  style={{ fontFamily: 'JetBrains Mono, Consolas' }}
+                  autosize={{ minRows: 6, maxRows: 12 }}
+                />
+              </Col>
+              <Col xs={24} sm={24} md={12} lg={12} xl={12}>
+                <Form.TextArea
+                  label={t('关键词替换规则')}
+                  extraText={t('一行一条，格式：原词=>替换词')}
+                  placeholder={t('例如：aaaa公司=>某某公司')}
+                  field={'KeywordReplaceRules'}
+                  onChange={(value) =>
+                    setInputs({
+                      ...inputs,
+                      KeywordReplaceRules: value,
                     })
                   }
                   style={{ fontFamily: 'JetBrains Mono, Consolas' }}

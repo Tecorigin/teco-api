@@ -25,7 +25,19 @@ export function getLogOther(otherStr) {
     return otherStr;
   }
   try {
-    return JSON.parse(otherStr);
+    const parsed = JSON.parse(otherStr);
+    // Some backends may return a JSON-encoded string; parse one more time.
+    if (typeof parsed === 'string') {
+      try {
+        const parsedAgain = JSON.parse(parsed);
+        if (parsedAgain && typeof parsedAgain === 'object') {
+          return parsedAgain;
+        }
+      } catch (_) {
+        // Ignore second parse error and fall through.
+      }
+    }
+    return parsed;
   } catch (e) {
     console.error(`Failed to parse record.other: "${otherStr}".`, e);
     return null;

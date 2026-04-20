@@ -44,6 +44,7 @@ const LogsTable = (logsData) => {
     hasExpandableRows,
     isAdminUser,
     billingDisplayMode,
+    isAuditMode,
     t,
     COLUMN_KEYS,
   } = logsData;
@@ -94,6 +95,7 @@ const LogsTable = (logsData) => {
       {...(hasExpandableRows() && {
         expandedRowRender: expandRowRender,
         expandRowByClick: true,
+        defaultExpandAllRows: isAuditMode,
         rowExpandable: (record) =>
           expandData[record.key] && expandData[record.key].length > 0,
       })}

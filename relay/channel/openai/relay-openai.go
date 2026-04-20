@@ -184,6 +184,9 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 		usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
 		usage.CompletionTokens += toolCount * 7
 	}
+	if responseTextBuilder.Len() > 0 {
+		common.SetContextKey(c, constant.ContextKeyAuditReplyText, responseTextBuilder.String())
+	}
 
 	applyUsagePostProcessing(info, usage, common.StringToByteSlice(lastStreamData))
 
@@ -232,6 +235,17 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		if choice.FinishReason == constant.FinishReasonContentFilter {
 			common.SetContextKey(c, constant.ContextKeyAdminRejectReason, "openai_finish_reason=content_filter")
 			break
+		}
+	}
+	{
+		var replyBuilder strings.Builder
+		for _, choice := range simpleResponse.Choices {
+			replyBuilder.WriteString(choice.Message.StringContent())
+			replyBuilder.WriteString(choice.Message.ReasoningContent)
+			replyBuilder.WriteString(choice.Message.Reasoning)
+		}
+		if replyBuilder.Len() > 0 {
+			common.SetContextKey(c, constant.ContextKeyAuditReplyText, replyBuilder.String())
 		}
 	}
 

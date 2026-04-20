@@ -4,6 +4,7 @@ import "strings"
 
 var CheckSensitiveEnabled = true
 var CheckSensitiveOnPromptEnabled = true
+var KeywordFilterEnabled = false
 
 //var CheckSensitiveOnCompletionEnabled = true
 
@@ -18,6 +19,13 @@ var StreamCacheQueueLength = 0
 var SensitiveWords = []string{
 	"test_sensitive",
 }
+
+type KeywordReplaceRule struct {
+	From string
+	To   string
+}
+
+var KeywordReplaceRules []KeywordReplaceRule
 
 func SensitiveWordsToString() string {
 	return strings.Join(SensitiveWords, "\n")
@@ -34,8 +42,51 @@ func SensitiveWordsFromString(s string) {
 	}
 }
 
+func KeywordReplaceRulesToString() string {
+	if len(KeywordReplaceRules) == 0 {
+		return ""
+	}
+	lines := make([]string, 0, len(KeywordReplaceRules))
+	for _, rule := range KeywordReplaceRules {
+		from := strings.TrimSpace(rule.From)
+		if from == "" {
+			continue
+		}
+		lines = append(lines, from+"=>"+rule.To)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func KeywordReplaceRulesFromString(s string) {
+	KeywordReplaceRules = []KeywordReplaceRule{}
+	if s == "" {
+		return
+	}
+	lines := strings.Split(s, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "=>", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		from := strings.TrimSpace(parts[0])
+		to := strings.TrimSpace(parts[1])
+		if from == "" {
+			continue
+		}
+		KeywordReplaceRules = append(KeywordReplaceRules, KeywordReplaceRule{From: from, To: to})
+	}
+}
+
 func ShouldCheckPromptSensitive() bool {
 	return CheckSensitiveEnabled && CheckSensitiveOnPromptEnabled
+}
+
+func ShouldApplyKeywordFilter() bool {
+	return KeywordFilterEnabled && len(KeywordReplaceRules) > 0
 }
 
 //func ShouldCheckCompletionSensitive() bool {

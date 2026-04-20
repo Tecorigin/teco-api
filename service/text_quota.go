@@ -355,6 +355,18 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	} else {
 		other = GenerateTextOtherInfo(ctx, relayInfo, summary.ModelRatio, summary.GroupRatio, summary.CompletionRatio, summary.CacheTokens, summary.CacheRatio, summary.ModelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
 	}
+	if promptFinal := buildAuditPromptFinal(ctx, relayInfo); promptFinal != "" {
+		other["audit_prompt"] = promptFinal
+	}
+	if promptRaw := buildAuditPromptRaw(ctx); promptRaw != "" && promptRaw != common.Interface2String(other["audit_prompt"]) {
+		other["audit_prompt_raw"] = promptRaw
+	}
+	if replyText := trimAuditText(common.GetContextKeyString(ctx, constant.ContextKeyAuditReplyText)); replyText != "" {
+		other["audit_reply"] = replyText
+	}
+	if keywordHits := common.GetContextKeyStringSlice(ctx, constant.ContextKeyAuditKeywordHits); len(keywordHits) > 0 {
+		other["audit_keyword_hits"] = keywordHits
+	}
 	if adminRejectReason != "" {
 		other["reject_reason"] = adminRejectReason
 	}
@@ -427,4 +439,34 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		Group:            relayInfo.UsingGroup,
 		Other:            other,
 	})
+}
+
+const maxAuditTextLength = 8000
+
+func trimAuditText(text string) string {
+	if text == "" {
+		return ""
+	}
+	if len(text) <= maxAuditTextLength {
+		return text
+	}
+	return text[:maxAuditTextLength]
+}
+
+func buildAuditPromptRaw(ctx *gin.Context) string {
+	return trimAuditText(common.GetContextKeyString(ctx, constant.ContextKeyAuditPromptRaw))
+}
+
+func buildAuditPromptFinal(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) string {
+	if prompt := trimAuditText(common.GetContextKeyString(ctx, constant.ContextKeyAuditPromptFinal)); prompt != "" {
+		return prompt
+	}
+	if relayInfo == nil || relayInfo.Request == nil {
+		return ""
+	}
+	meta := relayInfo.Request.GetTokenCountMeta()
+	if meta == nil {
+		return ""
+	}
+	return trimAuditText(meta.CombineText)
 }
