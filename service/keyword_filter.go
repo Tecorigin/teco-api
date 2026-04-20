@@ -1,6 +1,7 @@
 package service
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -187,13 +188,56 @@ func replaceByRules(text string, rules []setting.KeywordReplaceRule) (bool, []st
 		if from == "" {
 			continue
 		}
-		if strings.Contains(output, from) {
-			hits = append(hits, from)
-			output = strings.ReplaceAll(output, from, rule.To)
-			changed = true
+
+		pattern, ok := buildReplacePattern(from)
+		if !ok {
+			continue
 		}
+
+		if !pattern.MatchString(output) {
+			continue
+		}
+		hits = append(hits, from)
+		output = pattern.ReplaceAllString(output, rule.To)
+		changed = true
 	}
 	return changed, hits, output
+}
+
+func buildReplacePattern(from string) (*regexp.Regexp, bool) {
+	trimmed := strings.TrimSpace(from)
+	if trimmed == "" {
+		return nil, false
+	}
+
+	if strings.HasPrefix(strings.ToLower(trimmed), "re:") {
+		rawPattern := strings.TrimSpace(trimmed[3:])
+		if rawPattern == "" {
+			return nil, false
+		}
+		re, err := regexp.Compile("(?i)" + rawPattern)
+		if err != nil {
+			return nil, false
+		}
+		return re, true
+	}
+
+	if strings.ContainsAny(trimmed, "*?") {
+		wildcard := regexp.QuoteMeta(trimmed)
+		wildcard = strings.ReplaceAll(wildcard, `\*`, `.*`)
+		wildcard = strings.ReplaceAll(wildcard, `\?`, `.`)
+		re, err := regexp.Compile("(?i)" + wildcard)
+		if err != nil {
+			return nil, false
+		}
+		return re, true
+	}
+
+	re, err := regexp.Compile("(?i)" + regexp.QuoteMeta(trimmed))
+	if err != nil {
+		return nil, false
+	}
+	return re, true
 }
 
 func dedupStrings(values []string) []string {

@@ -149,7 +149,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		contains, words := service.CheckSensitiveText(meta.CombineText)
 		if contains {
 			logger.LogWarn(c, fmt.Sprintf("user sensitive words detected: %s", strings.Join(words, ", ")))
-			newAPIError = types.NewError(err, types.ErrorCodeSensitiveWordsDetected)
+			newAPIError = types.NewOpenAIError(
+				errors.New("内容包含敏感词，请检查后重试"),
+				types.ErrorCodeSensitiveWordsDetected,
+				http.StatusBadRequest,
+				types.ErrOptionWithSkipRetry(),
+			)
 			return
 		}
 	}

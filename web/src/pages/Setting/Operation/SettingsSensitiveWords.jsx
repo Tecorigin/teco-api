@@ -163,8 +163,8 @@ export default function SettingsSensitiveWords(props) {
               <Col xs={24} sm={24} md={12} lg={12} xl={12}>
                 <Form.TextArea
                   label={t('关键词替换规则')}
-                  extraText={t('一行一条，格式：原词=>替换词')}
-                  placeholder={t('例如：aaaa公司=>某某公司')}
+                  extraText={t('一行一条，格式：原词=>替换词；默认不区分大小写，支持通配符(*、?)和正则(re:表达式)')}
+                  placeholder={t('例如：aaaa=>bbbb 或 foo*bar=>baz 或 re:\\baaaa\\b=>bbbb')}
                   field={'KeywordReplaceRules'}
                   onChange={(value) =>
                     setInputs({
