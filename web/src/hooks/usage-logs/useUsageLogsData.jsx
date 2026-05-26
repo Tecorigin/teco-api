@@ -409,6 +409,14 @@ export const useLogsData = ({ mode = 'log' } = {}) => {
           value: logs[i].request_id,
         });
       }
+      const upstreamRequestId =
+        logs[i].upstream_request_id || other?.upstream_request_id;
+      if (upstreamRequestId) {
+        expandDataLocal.push({
+          key: t('Upstream Request ID'),
+          value: upstreamRequestId,
+        });
+      }
       if (other?.ws || other?.audio) {
         expandDataLocal.push({
           key: t('语音输入'),

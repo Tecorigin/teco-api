@@ -31,6 +31,18 @@ func appendRequestPath(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, other
 	}
 }
 
+func appendUpstreamRequestInfo(relayInfo *relaycommon.RelayInfo, other map[string]interface{}) {
+	if relayInfo == nil || other == nil {
+		return
+	}
+	if relayInfo.UpstreamRequestId != "" {
+		other["upstream_request_id"] = relayInfo.UpstreamRequestId
+	}
+	if relayInfo.UpstreamRequestSource != "" {
+		other["upstream_request_id_source"] = relayInfo.UpstreamRequestSource
+	}
+}
+
 func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, modelRatio, groupRatio, completionRatio float64,
 	cacheTokens int, cacheRatio float64, modelPrice float64, userGroupRatio float64) map[string]interface{} {
 	other := make(map[string]interface{})
@@ -72,6 +84,7 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 
 	other["admin_info"] = adminInfo
 	appendRequestPath(ctx, relayInfo, other)
+	appendUpstreamRequestInfo(relayInfo, other)
 	appendRequestConversionChain(relayInfo, other)
 	appendFinalRequestFormat(relayInfo, other)
 	appendBillingInfo(relayInfo, other)

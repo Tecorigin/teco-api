@@ -4,15 +4,44 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
+
+var upstreamRequestIDHeaderCandidates = []string{
+	"openai-request-id",
+	"anthropic-request-id",
+	"x-request-id",
+	"request-id",
+	"x-amzn-requestid",
+	"cf-ray",
+}
+
+func CaptureUpstreamRequestID(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) {
+	if resp == nil || info == nil {
+		return
+	}
+	for _, key := range upstreamRequestIDHeaderCandidates {
+		value := strings.TrimSpace(resp.Header.Get(key))
+		if value == "" {
+			continue
+		}
+		info.SetUpstreamRequestId(value, "header:"+key)
+		if c != nil {
+			c.Set("upstream_request_id", info.UpstreamRequestId)
+			c.Set("upstream_request_id_source", info.UpstreamRequestSource)
+		}
+		return
+	}
+}
 
 func FlushWriter(c *gin.Context) (err error) {
 	defer func() {

@@ -36,6 +36,7 @@ type Log struct {
 	Group            string `json:"group" gorm:"index"`
 	Ip               string `json:"ip" gorm:"index;default:''"`
 	RequestId        string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
+	UpstreamRequestId string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
 	Other            string `json:"other" gorm:"type:text"`
 }
 
@@ -178,7 +179,16 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 			return ""
 		}(),
 		RequestId: requestId,
-		Other:     otherStr,
+		UpstreamRequestId: func() string {
+			if other == nil {
+				return ""
+			}
+			if value, ok := other["upstream_request_id"].(string); ok {
+				return value
+			}
+			return ""
+		}(),
+		Other: otherStr,
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {
@@ -239,7 +249,16 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 			return ""
 		}(),
 		RequestId: requestId,
-		Other:     otherStr,
+		UpstreamRequestId: func() string {
+			if params.Other == nil {
+				return ""
+			}
+			if value, ok := params.Other["upstream_request_id"].(string); ok {
+				return value
+			}
+			return ""
+		}(),
+		Other: otherStr,
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {
@@ -313,7 +332,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 		tx = tx.Where("logs.token_name = ?", tokenName)
 	}
 	if requestId != "" {
-		tx = tx.Where("logs.request_id = ?", requestId)
+		tx = tx.Where("(logs.request_id = ? OR logs.upstream_request_id = ?)", requestId, requestId)
 	}
 	if auditOnly {
 		tx = tx.Where("(logs.other LIKE ? OR logs.other LIKE ?)", "%\"audit_prompt\"%", "%\"audit_reply\"%")
@@ -403,7 +422,7 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 		tx = tx.Where("logs.token_name = ?", tokenName)
 	}
 	if requestId != "" {
-		tx = tx.Where("logs.request_id = ?", requestId)
+		tx = tx.Where("(logs.request_id = ? OR logs.upstream_request_id = ?)", requestId, requestId)
 	}
 	if auditOnly {
 		tx = tx.Where("(logs.other LIKE ? OR logs.other LIKE ?)", "%\"audit_prompt\"%", "%\"audit_reply\"%")

@@ -92,6 +92,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	var httpResp *http.Response
 	if resp != nil {
 		httpResp = resp.(*http.Response)
+		helper.CaptureUpstreamRequestID(c, httpResp, info)
 		info.IsStream = info.IsStream || strings.HasPrefix(httpResp.Header.Get("Content-Type"), "text/event-stream")
 		if httpResp.StatusCode != http.StatusOK {
 			if httpResp.StatusCode == http.StatusCreated && info.ApiType == constant.APITypeReplicate {

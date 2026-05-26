@@ -20,6 +20,8 @@ tiktoken_cache
 .gomodcache/
 .cache
 web/bun.lock
+web/**/dist/
+web/**/node_modules/
 plans
 .claude
 

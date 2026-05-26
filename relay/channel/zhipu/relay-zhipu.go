@@ -196,13 +196,16 @@ func zhipuStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.
 			return true
 		case data := <-metaChan:
 			var zhipuResponse ZhipuStreamMetaResponse
-			err := json.Unmarshal([]byte(data), &zhipuResponse)
+			err := common.Unmarshal([]byte(data), &zhipuResponse)
 			if err != nil {
 				common.SysLog("error unmarshalling stream response: " + err.Error())
 				return true
 			}
+			info.SetUpstreamRequestId(zhipuResponse.RequestId, "body:request_id")
+			c.Set("upstream_request_id", info.UpstreamRequestId)
+			c.Set("upstream_request_id_source", info.UpstreamRequestSource)
 			response, zhipuUsage := streamMetaResponseZhipu2OpenAI(&zhipuResponse)
-			jsonResponse, err := json.Marshal(response)
+			jsonResponse, err := common.Marshal(response)
 			if err != nil {
 				common.SysLog("error marshalling stream response: " + err.Error())
 				return true
@@ -230,6 +233,9 @@ func zhipuHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respon
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
+	info.SetUpstreamRequestId(zhipuResponse.Data.RequestId, "body:request_id")
+	c.Set("upstream_request_id", info.UpstreamRequestId)
+	c.Set("upstream_request_id_source", info.UpstreamRequestSource)
 	if !zhipuResponse.Success {
 		return nil, types.WithOpenAIError(types.OpenAIError{
 			Message: zhipuResponse.Msg,
@@ -237,7 +243,7 @@ func zhipuHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respon
 		}, resp.StatusCode)
 	}
 	fullTextResponse := responseZhipu2OpenAI(&zhipuResponse)
-	jsonResponse, err := json.Marshal(fullTextResponse)
+	jsonResponse, err := common.Marshal(fullTextResponse)
 	if err != nil {
 		return nil, types.NewError(err, types.ErrorCodeBadResponseBody)
 	}

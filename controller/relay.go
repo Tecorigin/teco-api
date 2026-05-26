@@ -393,6 +393,16 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		other["channel_id"] = channelId
 		other["channel_name"] = c.GetString("channel_name")
 		other["channel_type"] = c.GetInt("channel_type")
+		if upstreamRequestID, ok := c.Get("upstream_request_id"); ok {
+			if upstreamRequestIDStr, ok := upstreamRequestID.(string); ok && upstreamRequestIDStr != "" {
+				other["upstream_request_id"] = upstreamRequestIDStr
+			}
+		}
+		if upstreamRequestSource, ok := c.Get("upstream_request_id_source"); ok {
+			if upstreamRequestSourceStr, ok := upstreamRequestSource.(string); ok && upstreamRequestSourceStr != "" {
+				other["upstream_request_id_source"] = upstreamRequestSourceStr
+			}
+		}
 		adminInfo := make(map[string]interface{})
 		adminInfo["use_channel"] = c.GetStringSlice("use_channel")
 		isMultiKey := common.GetContextKeyBool(c, constant.ContextKeyChannelIsMultiKey)

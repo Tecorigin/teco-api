@@ -141,6 +141,10 @@ type RelayInfo struct {
 	SubscriptionPlanTitle string
 	// RequestId is used for idempotent pre-consume/refund
 	RequestId string
+	// UpstreamRequestId stores provider-side request id / trace id for diagnostics.
+	UpstreamRequestId string
+	// UpstreamRequestSource records where the upstream request id came from, e.g. header name or body field.
+	UpstreamRequestSource string
 	// SubscriptionAmountTotal / SubscriptionAmountUsedAfterPreConsume are used to compute remaining in logs.
 	SubscriptionAmountTotal               int64
 	SubscriptionAmountUsedAfterPreConsume int64
@@ -518,6 +522,21 @@ func cloneRequestHeaders(c *gin.Context) map[string]string {
 		return nil
 	}
 	return headers
+}
+
+func (info *RelayInfo) SetUpstreamRequestId(id string, source string) {
+	if info == nil {
+		return
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return
+	}
+	if strings.TrimSpace(info.UpstreamRequestId) != "" {
+		return
+	}
+	info.UpstreamRequestId = id
+	info.UpstreamRequestSource = strings.TrimSpace(source)
 }
 
 func GenRelayInfo(c *gin.Context, relayFormat types.RelayFormat, request dto.Request, ws *websocket.Conn) (*RelayInfo, error) {
