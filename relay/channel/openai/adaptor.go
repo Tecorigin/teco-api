@@ -325,6 +325,19 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 			request.Temperature = nil
 			request.TopP = nil
 			request.LogProbs = nil
+
+			// gpt-5 下游 agent / 对话消息场景下，过小的 max tokens 会导致请求异常，最低抬到 16
+			if len(request.Messages) > 0 {
+				if request.MaxCompletionTokens != nil {
+					if *request.MaxCompletionTokens > 0 && *request.MaxCompletionTokens < 16 {
+						request.MaxCompletionTokens = lo.ToPtr(uint(16))
+					}
+				} else if request.MaxTokens != nil {
+					if *request.MaxTokens > 0 && *request.MaxTokens < 16 {
+						request.MaxTokens = lo.ToPtr(uint(16))
+					}
+				}
+			}
 		}
 
 		// 转换模型推理力度后缀
