@@ -189,6 +189,16 @@ func SetApiRouter(router *gin.Engine) {
 		}
 
 		// Custom OAuth provider management (root only)
+		userModelUsageLimitRoute := apiRouter.Group("/user_model_usage_limit")
+		userModelUsageLimitRoute.Use(middleware.AdminAuth())
+		{
+			userModelUsageLimitRoute.GET("/", controller.GetUserModelUsageLimits)
+			userModelUsageLimitRoute.POST("/", controller.CreateUserModelUsageLimit)
+			userModelUsageLimitRoute.PUT("/:id", controller.UpdateUserModelUsageLimit)
+			userModelUsageLimitRoute.DELETE("/:id", controller.DeleteUserModelUsageLimit)
+			userModelUsageLimitRoute.GET("/hits", controller.GetUserModelUsageLimitHits)
+		}
+
 		customOAuthRoute := apiRouter.Group("/custom-oauth-provider")
 		customOAuthRoute.Use(middleware.RootAuth())
 		{

@@ -42,6 +42,7 @@ const routerMap = {
   audit: '/console/audit',
   midjourney: '/console/midjourney',
   setting: '/console/setting',
+  modelUsageLimit: '/console/model-usage-limit',
   about: '/about',
   detail: '/console',
   pricing: '/pricing',
@@ -188,6 +189,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('用户管理'),
         itemKey: 'user',
         to: '/user',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('模型用量限制'),
+        itemKey: 'modelUsageLimit',
+        to: '/model-usage-limit',
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {

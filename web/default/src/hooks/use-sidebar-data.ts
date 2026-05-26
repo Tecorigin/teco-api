@@ -146,6 +146,11 @@ export function useSidebarData(): SidebarData {
             icon: CreditCard,
           },
           {
+            title: t('Model Usage Limits'),
+            url: '/model-usage-limits',
+            icon: Settings,
+          },
+          {
             title: t('System Settings'),
             url: '/system-settings/site',
             activeUrls: ['/system-settings'],

@@ -168,6 +168,20 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	relayInfo.SetEstimatePromptTokens(tokens)
 
+	userId := c.GetInt("id")
+	if exceeded, limitErr := model.CheckUserModelUsageLimit(userId, relayInfo.OriginModelName, int64(tokens), 1, requestId); limitErr != nil {
+		newAPIError = types.NewError(limitErr, types.ErrorCodeUpdateDataError)
+		return
+	} else if exceeded != nil && exceeded.Exceeded {
+		newAPIError = types.NewOpenAIError(
+			errors.New("使用超限"),
+			types.ErrorCodeAccessDenied,
+			http.StatusTooManyRequests,
+			types.ErrOptionWithSkipRetry(),
+		)
+		return
+	}
+
 	priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest))

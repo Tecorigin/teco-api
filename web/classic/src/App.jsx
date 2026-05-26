@@ -48,6 +48,7 @@ import Playground from './pages/Playground';
 import Subscription from './pages/Subscription';
 import OAuth2Callback from './components/auth/OAuth2Callback';
 import PersonalSetting from './components/settings/PersonalSetting';
+import ModelUsageLimit from './pages/ModelUsageLimit';
 import Setup from './pages/Setup';
 import SetupCheck from './components/layout/SetupCheck';
 
@@ -254,6 +255,16 @@ function App() {
             <AdminRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <Setting />
+              </Suspense>
+            </AdminRoute>
+          }
+        />
+        <Route
+          path='/console/model-usage-limit'
+          element={
+            <AdminRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <ModelUsageLimit />
               </Suspense>
             </AdminRoute>
           }

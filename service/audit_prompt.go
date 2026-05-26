@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -20,6 +21,8 @@ func BuildAuditPromptForRequest(request dto.Request) string {
 	switch req := request.(type) {
 	case *dto.GeneralOpenAIRequest:
 		collectOpenAITexts(req, &userTexts, &systemTexts, &otherTexts)
+	case *dto.OpenAIResponsesRequest:
+		collectOpenAIResponsesTexts(req, &userTexts, &systemTexts, &otherTexts)
 	case *dto.ClaudeRequest:
 		collectClaudeTexts(req, &userTexts, &systemTexts, &otherTexts)
 	case *dto.GeminiChatRequest:
@@ -68,6 +71,31 @@ func collectOpenAITexts(req *dto.GeneralOpenAIRequest, userTexts, systemTexts, o
 			appendIfNotEmpty(systemTexts, text)
 		default:
 			appendIfNotEmpty(otherTexts, text)
+		}
+	}
+}
+
+func collectOpenAIResponsesTexts(req *dto.OpenAIResponsesRequest, userTexts, systemTexts, otherTexts *[]string) {
+	if req == nil {
+		return
+	}
+
+	if len(req.Instructions) > 0 {
+		appendIfNotEmpty(systemTexts, jsonRawToString(req.Instructions))
+	}
+
+	if len(req.Prompt) > 0 {
+		appendIfNotEmpty(userTexts, jsonRawToString(req.Prompt))
+	}
+
+	for _, input := range req.ParseInput() {
+		switch input.Type {
+		case "input_text":
+			appendIfNotEmpty(userTexts, input.Text)
+		case "input_file":
+			appendIfNotEmpty(otherTexts, input.FileUrl)
+		case "input_image":
+			appendIfNotEmpty(otherTexts, input.ImageUrl)
 		}
 	}
 }
@@ -129,9 +157,9 @@ func collectGeminiTexts(req *dto.GeminiChatRequest, userTexts, systemTexts, othe
 			continue
 		}
 		switch strings.ToLower(strings.TrimSpace(content.Role)) {
-		case "user", "":
+		case "user":
 			appendIfNotEmpty(userTexts, text)
-		case "system", "developer":
+		case "system", "developer", "model":
 			appendIfNotEmpty(systemTexts, text)
 		default:
 			appendIfNotEmpty(otherTexts, text)
@@ -140,63 +168,106 @@ func collectGeminiTexts(req *dto.GeminiChatRequest, userTexts, systemTexts, othe
 }
 
 func openAIMessageText(message dto.Message) string {
-	if message.IsStringContent() {
-		return strings.TrimSpace(message.StringContent())
-	}
 	parts := make([]string, 0)
-	for _, content := range message.ParseContent() {
-		if content.Type == dto.ContentTypeText {
-			appendIfNotEmpty(&parts, content.Text)
+	if message.IsStringContent() {
+		appendIfNotEmpty(&parts, message.StringContent())
+	} else {
+		for _, media := range message.ParseContent() {
+			switch media.Type {
+			case dto.ContentTypeText:
+				appendIfNotEmpty(&parts, media.Text)
+			case dto.ContentTypeFile:
+				if file := media.GetFile(); file != nil {
+					appendIfNotEmpty(&parts, file.FileName)
+					appendIfNotEmpty(&parts, file.FileId)
+				}
+			}
 		}
 	}
+	appendIfNotEmpty(&parts, derefString(message.ReasoningContent))
+	appendIfNotEmpty(&parts, derefString(message.Reasoning))
 	return strings.TrimSpace(strings.Join(parts, "\n"))
 }
 
 func claudeMessageText(message dto.ClaudeMessage) string {
-	if message.IsStringContent() {
-		return strings.TrimSpace(message.GetStringContent())
-	}
 	parts := make([]string, 0)
-	contents, _ := message.ParseContent()
-	for _, content := range contents {
-		if content.Type == "text" {
-			appendIfNotEmpty(&parts, content.GetText())
+	if message.IsStringContent() {
+		appendIfNotEmpty(&parts, message.GetStringContent())
+	} else {
+		mediaList, err := message.ParseContent()
+		if err == nil {
+			for _, media := range mediaList {
+				switch media.Type {
+				case "text":
+					appendIfNotEmpty(&parts, media.GetText())
+				case "tool_use":
+					appendIfNotEmpty(&parts, media.Name)
+					if media.Input != nil {
+						appendIfNotEmpty(&parts, fmt.Sprintf("%v", media.Input))
+					}
+				case "tool_result":
+					if media.Content != nil {
+						appendIfNotEmpty(&parts, fmt.Sprintf("%v", media.Content))
+					}
+				}
+			}
 		}
 	}
 	return strings.TrimSpace(strings.Join(parts, "\n"))
 }
 
-func anyToStrings(v any) []string {
-	switch item := v.(type) {
-	case nil:
-		return nil
+func anyToStrings(value any) []string {
+	switch v := value.(type) {
 	case string:
-		if strings.TrimSpace(item) == "" {
+		if strings.TrimSpace(v) == "" {
 			return nil
 		}
-		return []string{item}
+		return []string{v}
 	case []any:
-		out := make([]string, 0, len(item))
-		for _, val := range item {
-			s := strings.TrimSpace(fmt.Sprintf("%v", val))
-			if s != "" {
-				out = append(out, s)
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			result = append(result, anyToStrings(item)...)
+		}
+		return result
+	case []string:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			if strings.TrimSpace(item) != "" {
+				result = append(result, item)
 			}
 		}
-		return out
+		return result
 	default:
-		s := strings.TrimSpace(fmt.Sprintf("%v", item))
-		if s == "" {
+		text := strings.TrimSpace(fmt.Sprintf("%v", value))
+		if text == "" || text == "<nil>" {
 			return nil
 		}
-		return []string{s}
+		return []string{text}
 	}
 }
 
-func appendIfNotEmpty(values *[]string, value string) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
+func appendIfNotEmpty(target *[]string, value string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
 		return
 	}
-	*values = append(*values, trimmed)
+	*target = append(*target, value)
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func jsonRawToString(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var str string
+	if err := json.Unmarshal(raw, &str); err == nil {
+		return strings.TrimSpace(str)
+	}
+	return strings.TrimSpace(string(raw))
 }
