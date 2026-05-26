@@ -135,6 +135,36 @@ function formatRatio(ratio: number | undefined): string {
   return ratio.toFixed(4)
 }
 
+function DetailTextBlock(props: { text: string; copyValue?: string }) {
+  const { t } = useTranslation()
+  const { copyToClipboard, copiedText } = useCopyToClipboard()
+  const value = props.copyValue ?? props.text
+
+  return (
+    <div className='relative min-w-0'>
+      <Button
+        variant='ghost'
+        size='sm'
+        className='absolute top-0 right-0 h-5 w-5 p-0'
+        onClick={() => copyToClipboard(value)}
+        title={t('Copy to clipboard')}
+        aria-label={t('Copy to clipboard')}
+      >
+        {copiedText === value ? (
+          <Check className='size-3 text-green-600' />
+        ) : (
+          <Copy className='size-3' />
+        )}
+      </Button>
+      <div className='min-w-0 pr-6'>
+        <pre className='bg-background/70 max-h-64 overflow-auto rounded-md border p-2 text-xs leading-5 whitespace-pre-wrap break-words font-mono'>
+          {props.text}
+        </pre>
+      </div>
+    </div>
+  )
+}
+
 function BillingBreakdown(props: {
   log: UsageLog
   other: LogOtherData
@@ -666,6 +696,18 @@ export function DetailsDialog(props: DetailsDialogProps) {
                 variant='danger'
               >
                 <p className='text-xs break-words'>{other.reject_reason}</p>
+              </DetailSection>
+            )}
+
+            {other?.audit_prompt && (
+              <DetailSection label={t('Prompt Content')}>
+                <DetailTextBlock text={other.audit_prompt} />
+              </DetailSection>
+            )}
+
+            {other?.audit_reply && (
+              <DetailSection label={t('Reply Content')}>
+                <DetailTextBlock text={other.audit_reply} />
               </DetailSection>
             )}
 
