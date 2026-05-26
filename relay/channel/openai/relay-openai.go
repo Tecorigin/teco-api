@@ -241,8 +241,7 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		var replyBuilder strings.Builder
 		for _, choice := range simpleResponse.Choices {
 			replyBuilder.WriteString(choice.Message.StringContent())
-			replyBuilder.WriteString(choice.Message.ReasoningContent)
-			replyBuilder.WriteString(choice.Message.Reasoning)
+			replyBuilder.WriteString(choice.Message.GetReasoningContent())
 		}
 		if replyBuilder.Len() > 0 {
 			common.SetContextKey(c, constant.ContextKeyAuditReplyText, replyBuilder.String())
