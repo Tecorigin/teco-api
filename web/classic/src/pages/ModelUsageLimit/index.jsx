@@ -157,7 +157,7 @@ const ModelUsageLimit = () => {
       key: 'daily',
       render: (_, row) => (
         <div className='flex flex-col gap-1'>
-          <Text size='small'>{t('Token Amount')}: {row.daily_token_limit || 0}</Text>
+          <Text size='small'>Tokens: {row.daily_token_limit || 0}</Text>
           <Text size='small'>{t('Request Count')}: {row.daily_request_limit || 0}</Text>
         </div>
       ),
@@ -167,7 +167,7 @@ const ModelUsageLimit = () => {
       key: 'weekly',
       render: (_, row) => (
         <div className='flex flex-col gap-1'>
-          <Text size='small'>{t('Token Amount')}: {row.weekly_token_limit || 0}</Text>
+          <Text size='small'>Tokens: {row.weekly_token_limit || 0}</Text>
           <Text size='small'>{t('Request Count')}: {row.weekly_request_limit || 0}</Text>
         </div>
       ),
@@ -177,7 +177,7 @@ const ModelUsageLimit = () => {
       key: 'monthly',
       render: (_, row) => (
         <div className='flex flex-col gap-1'>
-          <Text size='small'>{t('Token Amount')}: {row.monthly_token_limit || 0}</Text>
+          <Text size='small'>Tokens: {row.monthly_token_limit || 0}</Text>
           <Text size='small'>{t('Request Count')}: {row.monthly_request_limit || 0}</Text>
         </div>
       ),

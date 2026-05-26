@@ -135,7 +135,7 @@ const EditLimitModal = ({ visible, handleClose, refresh, editingRow }) => {
           </div>
           <Row gutter={12} className='mt-2'>
             <Col span={12}>
-              <Form.InputNumber field='daily_token_limit' label={t('Token Amount')} min={0} />
+              <Form.InputNumber field='daily_token_limit' label='Tokens' min={0} />
             </Col>
             <Col span={12}>
               <Form.InputNumber field='daily_request_limit' label={t('Request Count')} min={0} />
@@ -147,7 +147,7 @@ const EditLimitModal = ({ visible, handleClose, refresh, editingRow }) => {
           </div>
           <Row gutter={12} className='mt-2'>
             <Col span={12}>
-              <Form.InputNumber field='weekly_token_limit' label={t('Token Amount')} min={0} />
+              <Form.InputNumber field='weekly_token_limit' label='Tokens' min={0} />
             </Col>
             <Col span={12}>
               <Form.InputNumber field='weekly_request_limit' label={t('Request Count')} min={0} />
@@ -159,7 +159,7 @@ const EditLimitModal = ({ visible, handleClose, refresh, editingRow }) => {
           </div>
           <Row gutter={12} className='mt-2'>
             <Col span={12}>
-              <Form.InputNumber field='monthly_token_limit' label={t('Token Amount')} min={0} />
+              <Form.InputNumber field='monthly_token_limit' label='Tokens' min={0} />
             </Col>
             <Col span={12}>
               <Form.InputNumber field='monthly_request_limit' label={t('Request Count')} min={0} />
