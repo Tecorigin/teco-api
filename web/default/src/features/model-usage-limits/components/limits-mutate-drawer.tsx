@@ -169,7 +169,7 @@ export function LimitsMutateDrawer({ open, onOpenChange, currentRow }: Props) {
             <h4 className='text-sm font-medium text-muted-foreground'>{t('Daily Limits')}</h4>
             <div className='grid grid-cols-2 gap-4'>
               <div className='space-y-2'>
-                <Label>{t('Token')}</Label>
+                <Label>Tokens</Label>
                 <Input
                   type='number'
                   min={0}
@@ -194,7 +194,7 @@ export function LimitsMutateDrawer({ open, onOpenChange, currentRow }: Props) {
             <h4 className='text-sm font-medium text-muted-foreground'>{t('Weekly Limits')}</h4>
             <div className='grid grid-cols-2 gap-4'>
               <div className='space-y-2'>
-                <Label>{t('Token')}</Label>
+                <Label>Tokens</Label>
                 <Input
                   type='number'
                   min={0}
@@ -219,7 +219,7 @@ export function LimitsMutateDrawer({ open, onOpenChange, currentRow }: Props) {
             <h4 className='text-sm font-medium text-muted-foreground'>{t('Monthly Limits')}</h4>
             <div className='grid grid-cols-2 gap-4'>
               <div className='space-y-2'>
-                <Label>{t('Token')}</Label>
+                <Label>Tokens</Label>
                 <Input
                   type='number'
                   min={0}
