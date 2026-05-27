@@ -189,6 +189,17 @@ const Home = () => {
                       https://github.com/QuantumNous/new-api
                     </a>
                   </p>
+                  <p className='text-sm md:text-base text-semi-color-text-2 mt-2 max-w-xl break-all'>
+                    修改内容已开源：
+                    <a
+                      href='https://github.com/safeYYY/new-api'
+                      target='_blank'
+                      rel='noreferrer'
+                      className='ml-1 underline'
+                    >
+                      https://github.com/safeYYY/new-api
+                    </a>
+                  </p>
                   {/* BASE URL 与端点选择 */}
                   <div className='flex flex-col md:flex-row items-center justify-center gap-4 w-full mt-4 md:mt-6 max-w-md'>
                     <Input

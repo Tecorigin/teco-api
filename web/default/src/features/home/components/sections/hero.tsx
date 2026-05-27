@@ -81,6 +81,20 @@ export function Hero(props: HeroProps) {
             https://github.com/QuantumNous/new-api
           </a>
         </p>
+        <p
+          className='landing-animate-fade-up text-muted-foreground/70 mt-2 text-sm opacity-0 md:text-base'
+          style={{ animationDelay: '140ms' }}
+        >
+          修改内容已开源：
+          <a
+            href='https://github.com/safeYYY/new-api'
+            target='_blank'
+            rel='noreferrer'
+            className='text-primary ml-1 underline underline-offset-4'
+          >
+            https://github.com/safeYYY/new-api
+          </a>
+        </p>
         <div
           className='landing-animate-fade-up mt-8 flex items-center gap-3 opacity-0'
           style={{ animationDelay: '160ms' }}
