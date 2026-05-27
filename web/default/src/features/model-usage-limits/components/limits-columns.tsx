@@ -10,6 +10,13 @@ function formatNum(v: number) {
   return v > 0 ? v.toLocaleString() : '—'
 }
 
+function formatUsage(used: number, limit: number) {
+  if (limit > 0) {
+    return `${(used || 0).toLocaleString()} / ${limit.toLocaleString()}`
+  }
+  return '—'
+}
+
 export function useLimitsColumns(): ColumnDef<LimitItem, unknown>[] {
   const { t } = useTranslation()
   const { setOpen, setCurrentRow, setDeleteOpen, setDeleteRow } = useLimits()
@@ -34,38 +41,62 @@ export function useLimitsColumns(): ColumnDef<LimitItem, unknown>[] {
     {
       accessorKey: 'daily_token_limit',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('Daily Token')} />,
-      cell: ({ row }) => <span className='tabular-nums'>{formatNum(row.original.daily_token_limit)}</span>,
-      size: 100,
+      cell: ({ row }) => (
+        <span className='tabular-nums'>
+          {formatUsage(row.original.daily_token_used, row.original.daily_token_limit)}
+        </span>
+      ),
+      size: 130,
     },
     {
       accessorKey: 'daily_request_limit',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('Daily Req')} />,
-      cell: ({ row }) => <span className='tabular-nums'>{formatNum(row.original.daily_request_limit)}</span>,
-      size: 100,
+      cell: ({ row }) => (
+        <span className='tabular-nums'>
+          {formatUsage(row.original.daily_request_used, row.original.daily_request_limit)}
+        </span>
+      ),
+      size: 130,
     },
     {
       accessorKey: 'weekly_token_limit',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('Weekly Token')} />,
-      cell: ({ row }) => <span className='tabular-nums'>{formatNum(row.original.weekly_token_limit)}</span>,
-      size: 110,
+      cell: ({ row }) => (
+        <span className='tabular-nums'>
+          {formatUsage(row.original.weekly_token_used, row.original.weekly_token_limit)}
+        </span>
+      ),
+      size: 140,
     },
     {
       accessorKey: 'weekly_request_limit',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('Weekly Req')} />,
-      cell: ({ row }) => <span className='tabular-nums'>{formatNum(row.original.weekly_request_limit)}</span>,
-      size: 100,
+      cell: ({ row }) => (
+        <span className='tabular-nums'>
+          {formatUsage(row.original.weekly_request_used, row.original.weekly_request_limit)}
+        </span>
+      ),
+      size: 130,
     },
     {
       accessorKey: 'monthly_token_limit',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('Monthly Token')} />,
-      cell: ({ row }) => <span className='tabular-nums'>{formatNum(row.original.monthly_token_limit)}</span>,
-      size: 120,
+      cell: ({ row }) => (
+        <span className='tabular-nums'>
+          {formatUsage(row.original.monthly_token_used, row.original.monthly_token_limit)}
+        </span>
+      ),
+      size: 150,
     },
     {
       accessorKey: 'monthly_request_limit',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('Monthly Req')} />,
-      cell: ({ row }) => <span className='tabular-nums'>{formatNum(row.original.monthly_request_limit)}</span>,
-      size: 110,
+      cell: ({ row }) => (
+        <span className='tabular-nums'>
+          {formatUsage(row.original.monthly_request_used, row.original.monthly_request_limit)}
+        </span>
+      ),
+      size: 140,
     },
     {
       id: 'actions',

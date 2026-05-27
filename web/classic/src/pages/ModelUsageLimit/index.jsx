@@ -49,6 +49,13 @@ const getPeriodTypeColor = (value) => {
   return 'grey';
 };
 
+const formatUsage = (used, limit) => {
+  if (limit > 0) {
+    return `${used || 0}/${limit}`;
+  }
+  return '-';
+};
+
 const ModelUsageLimit = () => {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
@@ -157,8 +164,8 @@ const ModelUsageLimit = () => {
       key: 'daily',
       render: (_, row) => (
         <div className='flex flex-col gap-1'>
-          <Text size='small'>Tokens: {row.daily_token_limit || 0}</Text>
-          <Text size='small'>{t('Request Count')}: {row.daily_request_limit || 0}</Text>
+          <Text size='small'>Tokens: {formatUsage(row.daily_token_used, row.daily_token_limit)}</Text>
+          <Text size='small'>{t('Request Count')}: {formatUsage(row.daily_request_used, row.daily_request_limit)}</Text>
         </div>
       ),
     },
@@ -167,8 +174,8 @@ const ModelUsageLimit = () => {
       key: 'weekly',
       render: (_, row) => (
         <div className='flex flex-col gap-1'>
-          <Text size='small'>Tokens: {row.weekly_token_limit || 0}</Text>
-          <Text size='small'>{t('Request Count')}: {row.weekly_request_limit || 0}</Text>
+          <Text size='small'>Tokens: {formatUsage(row.weekly_token_used, row.weekly_token_limit)}</Text>
+          <Text size='small'>{t('Request Count')}: {formatUsage(row.weekly_request_used, row.weekly_request_limit)}</Text>
         </div>
       ),
     },
@@ -177,8 +184,8 @@ const ModelUsageLimit = () => {
       key: 'monthly',
       render: (_, row) => (
         <div className='flex flex-col gap-1'>
-          <Text size='small'>Tokens: {row.monthly_token_limit || 0}</Text>
-          <Text size='small'>{t('Request Count')}: {row.monthly_request_limit || 0}</Text>
+          <Text size='small'>Tokens: {formatUsage(row.monthly_token_used, row.monthly_token_limit)}</Text>
+          <Text size='small'>{t('Request Count')}: {formatUsage(row.monthly_request_used, row.monthly_request_limit)}</Text>
         </div>
       ),
     },

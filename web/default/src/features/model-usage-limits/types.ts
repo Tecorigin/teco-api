@@ -9,6 +9,12 @@ export type LimitItem = {
   weekly_request_limit: number
   monthly_token_limit: number
   monthly_request_limit: number
+  daily_token_used: number
+  daily_request_used: number
+  weekly_token_used: number
+  weekly_request_used: number
+  monthly_token_used: number
+  monthly_request_used: number
 }
 
 export type HitItem = {

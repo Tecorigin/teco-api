@@ -20,6 +20,12 @@ type UserModelUsageLimit struct {
 	WeeklyRequestLimit  int64  `json:"weekly_request_limit" gorm:"default:0"`
 	MonthlyTokenLimit   int64  `json:"monthly_token_limit" gorm:"default:0"`
 	MonthlyRequestLimit int64  `json:"monthly_request_limit" gorm:"default:0"`
+	DailyTokenUsed      int64  `json:"daily_token_used" gorm:"-"`
+	DailyRequestUsed    int64  `json:"daily_request_used" gorm:"-"`
+	WeeklyTokenUsed     int64  `json:"weekly_token_used" gorm:"-"`
+	WeeklyRequestUsed   int64  `json:"weekly_request_used" gorm:"-"`
+	MonthlyTokenUsed    int64  `json:"monthly_token_used" gorm:"-"`
+	MonthlyRequestUsed  int64  `json:"monthly_request_used" gorm:"-"`
 	CreatedAt           int64  `json:"created_at" gorm:"bigint;autoCreateTime:milli"`
 	UpdatedAt           int64  `json:"updated_at" gorm:"bigint;autoUpdateTime:milli"`
 }
@@ -119,6 +125,37 @@ func GetUserModelUsageLimitById(id int) (*UserModelUsageLimit, error) {
 	return &limit, nil
 }
 
+func fillUserModelUsageLimitCurrentUsage(limits []*UserModelUsageLimit) error {
+	now := time.Now()
+	dailyStart := getPeriodStart(now, "daily").Unix()
+	weeklyStart := getPeriodStart(now, "weekly").Unix()
+	monthlyStart := getPeriodStart(now, "monthly").Unix()
+	for _, limit := range limits {
+		if limit == nil {
+			continue
+		}
+		if stat, err := GetUserModelUsageCounter(limit.UserId, limit.ModelName, "daily", dailyStart); err != nil {
+			return err
+		} else {
+			limit.DailyTokenUsed = stat.TokenCount
+			limit.DailyRequestUsed = stat.RequestCount
+		}
+		if stat, err := GetUserModelUsageCounter(limit.UserId, limit.ModelName, "weekly", weeklyStart); err != nil {
+			return err
+		} else {
+			limit.WeeklyTokenUsed = stat.TokenCount
+			limit.WeeklyRequestUsed = stat.RequestCount
+		}
+		if stat, err := GetUserModelUsageCounter(limit.UserId, limit.ModelName, "monthly", monthlyStart); err != nil {
+			return err
+		} else {
+			limit.MonthlyTokenUsed = stat.TokenCount
+			limit.MonthlyRequestUsed = stat.RequestCount
+		}
+	}
+	return nil
+}
+
 func GetUserModelUsageLimits(keyword string, pageInfo *common.PageInfo) ([]*UserModelUsageLimit, int64, error) {
 	var limits []*UserModelUsageLimit
 	var total int64
@@ -131,6 +168,9 @@ func GetUserModelUsageLimits(keyword string, pageInfo *common.PageInfo) ([]*User
 		return nil, 0, err
 	}
 	if err := tx.Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&limits).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := fillUserModelUsageLimitCurrentUsage(limits); err != nil {
 		return nil, 0, err
 	}
 	return limits, total, nil
