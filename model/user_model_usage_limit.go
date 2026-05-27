@@ -189,21 +189,14 @@ func getPeriodStart(ts time.Time, periodType string) time.Time {
 }
 
 func GetUserModelUsageStatsSince(userId int, modelName string, startAt int64) (*UserModelUsageStat, error) {
-	stat := &UserModelUsageStat{}
-	var row struct {
-		TokenCount   int64
-		RequestCount int64
+	now := time.Unix(startAt, 0)
+	periodTypes := []string{"daily", "weekly", "monthly"}
+	for _, periodType := range periodTypes {
+		if getPeriodStart(now, periodType).Unix() == startAt {
+			return GetUserModelUsageCounter(userId, modelName, periodType, startAt)
+		}
 	}
-	err := LOG_DB.Model(&Log{}).
-		Select("COALESCE(SUM(prompt_tokens + completion_tokens), 0) AS token_count, COUNT(1) AS request_count").
-		Where("user_id = ? AND model_name = ? AND created_at >= ? AND type = ?", userId, modelName, startAt, LogTypeConsume).
-		Scan(&row).Error
-	if err != nil {
-		return nil, err
-	}
-	stat.TokenCount = row.TokenCount
-	stat.RequestCount = row.RequestCount
-	return stat, nil
+	return &UserModelUsageStat{}, nil
 }
 
 func CheckUserModelUsageLimit(userId int, modelName string, estimatedTokens int64, requestIncrement int64, requestId string) (*UserModelUsageExceededResult, error) {

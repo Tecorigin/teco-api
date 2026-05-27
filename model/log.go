@@ -134,30 +134,30 @@ func RecordBatchLog(logs []*Log) error {
 }
 
 type RecordConsumeLogParams struct {
-	UserId             int
-	ChannelId          int
-	PromptTokens       int
-	CompletionTokens   int
-	ModelName          string
-	TokenName          string
-	Quota              int
-	Content            string
-	UseTimeSeconds     int
-	IsStream           bool
-	TokenId            int
-	UserQuota          int
-	Group              string
-	Other              map[string]interface{}
-	PricingType        int
-	TaskID             string
-	ModelRatio         float64
-	ModelPrice         float64
-	BillingByRequest   bool
-	RequestCount       int
-	ContextCount       int
-	ContextCostQuota   int
-	RequestID          string
-	UpstreamRequestID  string
+	UserId            int
+	ChannelId         int
+	PromptTokens      int
+	CompletionTokens  int
+	ModelName         string
+	TokenName         string
+	Quota             int
+	Content           string
+	UseTimeSeconds    int
+	IsStream          bool
+	TokenId           int
+	UserQuota         int
+	Group             string
+	Other             map[string]interface{}
+	PricingType       int
+	TaskID            string
+	ModelRatio        float64
+	ModelPrice        float64
+	BillingByRequest  bool
+	RequestCount      int
+	ContextCount      int
+	ContextCostQuota  int
+	RequestID         string
+	UpstreamRequestID string
 }
 
 type RecordTaskBillingLogParams struct {
@@ -217,6 +217,10 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	}
 	if err := LOG_DB.Create(log).Error; err != nil {
 		common.SysError("failed to record consume log: " + err.Error())
+		return
+	}
+	if err := IncrementUserModelUsageCounter(userId, params.ModelName, int64(params.PromptTokens+params.CompletionTokens), 1, time.Unix(createdAt, 0)); err != nil {
+		common.SysError("failed to increment user model usage counter: " + err.Error())
 	}
 }
 
