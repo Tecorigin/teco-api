@@ -195,6 +195,13 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 			upstreamRequestId = value
 		}
 	}
+	requestPath := ""
+	if params.Other != nil {
+		if value, ok := params.Other["request_path"].(string); ok {
+			requestPath = value
+		}
+	}
+	common.SysLog(fmt.Sprintf("record consume log: userId=%d, model=%s, request_id=%s, upstream_request_id=%s, request_path=%s, quota=%d, prompt_tokens=%d, completion_tokens=%d, channel_id=%d, group=%s", userId, params.ModelName, requestId, upstreamRequestId, requestPath, params.Quota, params.PromptTokens, params.CompletionTokens, params.ChannelId, params.Group))
 	log := &Log{
 		UserId:            userId,
 		Username:          username,
