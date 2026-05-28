@@ -61,8 +61,8 @@ func IncrementUserModelUsageCounter(userId int, modelName string, tokenIncrement
 				{Name: "period_start"},
 			},
 			DoUpdates: clause.Assignments(map[string]interface{}{
-				"token_count":   gorm.Expr("token_count + ?", tokenIncrement),
-				"request_count": gorm.Expr("request_count + ?", requestIncrement),
+				"token_count":   gorm.Expr("user_model_usage_counters.token_count + ?", tokenIncrement),
+				"request_count": gorm.Expr("user_model_usage_counters.request_count + ?", requestIncrement),
 				"updated_at":    common.GetTimestamp(),
 			}),
 		}).Create(counter).Error; err != nil {
