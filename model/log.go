@@ -195,13 +195,45 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 			upstreamRequestId = value
 		}
 	}
-	requestPath := ""
-	if params.Other != nil {
-		if value, ok := params.Other["request_path"].(string); ok {
-			requestPath = value
-		}
+	debugParams := map[string]interface{}{
+		"user_id":             userId,
+		"channel_id":          params.ChannelId,
+		"prompt_tokens":       params.PromptTokens,
+		"completion_tokens":   params.CompletionTokens,
+		"model_name":          params.ModelName,
+		"token_name":          params.TokenName,
+		"quota":               params.Quota,
+		"content":             params.Content,
+		"use_time_seconds":    params.UseTimeSeconds,
+		"is_stream":           params.IsStream,
+		"token_id":            params.TokenId,
+		"user_quota":          params.UserQuota,
+		"group":               params.Group,
+		"pricing_type":        params.PricingType,
+		"task_id":             params.TaskID,
+		"model_ratio":         params.ModelRatio,
+		"model_price":         params.ModelPrice,
+		"billing_by_request":  params.BillingByRequest,
+		"request_count":       params.RequestCount,
+		"context_count":       params.ContextCount,
+		"context_cost_quota":  params.ContextCostQuota,
+		"request_id":          requestId,
+		"upstream_request_id": upstreamRequestId,
 	}
-	common.SysLog(fmt.Sprintf("record consume log: userId=%d, model=%s, request_id=%s, upstream_request_id=%s, request_path=%s, quota=%d, prompt_tokens=%d, completion_tokens=%d, channel_id=%d, group=%s", userId, params.ModelName, requestId, upstreamRequestId, requestPath, params.Quota, params.PromptTokens, params.CompletionTokens, params.ChannelId, params.Group))
+	if params.Other != nil {
+		otherForDebug := make(map[string]interface{}, len(params.Other))
+		for k, v := range params.Other {
+			otherForDebug[k] = v
+		}
+		if value, ok := otherForDebug["audit_prompt"].(string); ok && len(value) > 500 {
+			otherForDebug["audit_prompt"] = value[:500] + "...(truncated)"
+		}
+		if value, ok := otherForDebug["audit_reply"].(string); ok && len(value) > 500 {
+			otherForDebug["audit_reply"] = value[:500] + "...(truncated)"
+		}
+		debugParams["other"] = otherForDebug
+	}
+	common.SysLog(fmt.Sprintf("record consume log: userId=%d, params=%s", userId, common.MapToJsonStr(debugParams)))
 	log := &Log{
 		UserId:            userId,
 		Username:          username,
