@@ -222,6 +222,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if err := IncrementUserModelUsageCounter(userId, params.ModelName, int64(params.PromptTokens+params.CompletionTokens), 1, time.Unix(createdAt, 0)); err != nil {
 		common.SysError("failed to increment user model usage counter: " + err.Error())
 	}
+	LogQuotaData(userId, username, params.ModelName, params.Quota, createdAt, params.PromptTokens+params.CompletionTokens)
 }
 
 func RecordConsumeLogBatch(logs []*Log) {
