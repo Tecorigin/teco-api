@@ -12,10 +12,10 @@ import (
 
 type UserModelUsageCounter struct {
 	Id           int    `json:"id" gorm:"primaryKey"`
-	UserId       int    `json:"user_id" gorm:"index:idx_user_model_usage_counter,priority:1;not null"`
-	ModelName    string `json:"model_name" gorm:"type:varchar(128);index:idx_user_model_usage_counter,priority:2;not null"`
-	PeriodType   string `json:"period_type" gorm:"type:varchar(16);index:idx_user_model_usage_counter,priority:3;not null"`
-	PeriodStart  int64  `json:"period_start" gorm:"index:idx_user_model_usage_counter,priority:4;not null"`
+	UserId       int    `json:"user_id" gorm:"uniqueIndex:uk_user_model_usage_counter,priority:1;not null"`
+	ModelName    string `json:"model_name" gorm:"type:varchar(128);uniqueIndex:uk_user_model_usage_counter,priority:2;not null"`
+	PeriodType   string `json:"period_type" gorm:"type:varchar(16);uniqueIndex:uk_user_model_usage_counter,priority:3;not null"`
+	PeriodStart  int64  `json:"period_start" gorm:"uniqueIndex:uk_user_model_usage_counter,priority:4;not null"`
 	TokenCount   int64  `json:"token_count" gorm:"default:0"`
 	RequestCount int64  `json:"request_count" gorm:"default:0"`
 	CreatedAt    int64  `json:"created_at" gorm:"bigint;autoCreateTime:milli"`
@@ -24,16 +24,13 @@ type UserModelUsageCounter struct {
 
 func GetUserModelUsageCounter(userId int, modelName, periodType string, periodStart int64) (*UserModelUsageStat, error) {
 	stat := &UserModelUsageStat{}
-	var counter UserModelUsageCounter
-	err := DB.Where("user_id = ? AND model_name = ? AND period_type = ? AND period_start = ?", userId, modelName, periodType, periodStart).First(&counter).Error
+	err := DB.Model(&UserModelUsageCounter{}).
+		Select("COALESCE(SUM(token_count), 0) AS token_count, COALESCE(SUM(request_count), 0) AS request_count").
+		Where("user_id = ? AND model_name = ? AND period_type = ? AND period_start = ?", userId, modelName, periodType, periodStart).
+		Scan(stat).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return stat, nil
-		}
 		return nil, err
 	}
-	stat.TokenCount = counter.TokenCount
-	stat.RequestCount = counter.RequestCount
 	return stat, nil
 }
 
