@@ -183,6 +183,18 @@ func RecordUserModelUsageLimitHit(hit *UserModelUsageLimitHit) error {
 	if hit.Username == "" && hit.UserId > 0 {
 		hit.Username, _ = GetUsernameById(hit.UserId, false)
 	}
+	// 当前周期内只记录一次 hit，避免大量重复记录
+	periodStart := getPeriodStart(time.Now(), hit.PeriodType).Unix()
+	var existingCount int64
+	if err := DB.Model(&UserModelUsageLimitHit{}).
+		Where("user_id = ? AND model_name = ? AND limit_type = ? AND period_type = ? AND created_at >= ?",
+			hit.UserId, hit.ModelName, hit.LimitType, hit.PeriodType, periodStart).
+		Count(&existingCount).Error; err != nil {
+		return err
+	}
+	if existingCount > 0 {
+		return nil
+	}
 	return DB.Create(hit).Error
 }
 
@@ -290,8 +302,8 @@ func CheckUserModelUsageLimit(userId int, modelName string, estimatedTokens int6
 			}
 		}
 		if check.RequestLimit > 0 {
-			used := stat.RequestCount + requestIncrement
-			if used > check.RequestLimit {
+			used := stat.RequestCount
+			if used >= check.RequestLimit {
 				_ = RecordUserModelUsageLimitHit(&UserModelUsageLimitHit{
 					UserId:     userId,
 					Username:   limit.Username,
