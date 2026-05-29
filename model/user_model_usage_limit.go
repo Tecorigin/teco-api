@@ -274,8 +274,8 @@ func CheckUserModelUsageLimit(userId int, modelName string, estimatedTokens int6
 			return nil, err
 		}
 		if check.TokenLimit > 0 {
-			used := stat.TokenCount + estimatedTokens
-			if used > check.TokenLimit {
+			used := stat.TokenCount
+			if used >= check.TokenLimit {
 				_ = RecordUserModelUsageLimitHit(&UserModelUsageLimitHit{
 					UserId:     userId,
 					Username:   limit.Username,

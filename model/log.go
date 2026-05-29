@@ -178,10 +178,7 @@ const (
 	LogPricingTypeModelPrice
 )
 
-func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
-	if !common.LogConsumeEnabled {
-		return
-	}
+func buildConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) (*Log, string, string, int64, map[string]interface{}) {
 	username, _ := GetUsernameById(userId, false)
 	createdAt := common.GetTimestamp()
 	otherStr := common.MapToJsonStr(params.Other)
@@ -233,7 +230,6 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		}
 		debugParams["other"] = otherForDebug
 	}
-	common.SysLog(fmt.Sprintf("record consume log: userId=%d, params=%s", userId, common.MapToJsonStr(debugParams)))
 	log := &Log{
 		UserId:            userId,
 		Username:          username,
@@ -254,6 +250,15 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		UpstreamRequestId: upstreamRequestId,
 		Other:             otherStr,
 	}
+	return log, username, requestId, createdAt, debugParams
+}
+
+func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
+	if !common.LogConsumeEnabled {
+		return
+	}
+	log, username, _, createdAt, debugParams := buildConsumeLog(c, userId, params)
+	common.SysLog(fmt.Sprintf("record consume log: userId=%d, params=%s", userId, common.MapToJsonStr(debugParams)))
 	if err := LOG_DB.Create(log).Error; err != nil {
 		common.SysError("failed to record consume log: " + err.Error())
 		return
@@ -262,6 +267,17 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		common.SysError("failed to increment user model usage counter: " + err.Error())
 	}
 	LogQuotaData(userId, username, params.ModelName, params.Quota, createdAt, params.PromptTokens+params.CompletionTokens)
+}
+
+func RecordConsumeBlockedLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
+	if !common.LogConsumeEnabled {
+		return
+	}
+	log, _, _, _, debugParams := buildConsumeLog(c, userId, params)
+	common.SysLog(fmt.Sprintf("record blocked consume log: userId=%d, params=%s", userId, common.MapToJsonStr(debugParams)))
+	if err := LOG_DB.Create(log).Error; err != nil {
+		common.SysError("failed to record blocked consume log: " + err.Error())
+	}
 }
 
 func RecordConsumeLogBatch(logs []*Log) {

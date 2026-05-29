@@ -173,6 +173,33 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		newAPIError = types.NewError(limitErr, types.ErrorCodeUpdateDataError)
 		return
 	} else if exceeded != nil && exceeded.Exceeded {
+		channelId := common.GetContextKeyInt(c, constant.ContextKeyChannelId)
+		tokenId := common.GetContextKeyInt(c, constant.ContextKeyTokenId)
+		usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+		isStream := false
+		if relayInfo != nil {
+			isStream = relayInfo.IsStream
+		}
+		model.RecordConsumeBlockedLog(c, userId, model.RecordConsumeLogParams{
+			ChannelId:        channelId,
+			PromptTokens:     0,
+			CompletionTokens: 0,
+			ModelName:        relayInfo.OriginModelName,
+			TokenName:        "",
+			Quota:            0,
+			Content:          "使用超限，已在本地直接拦截并返回 429",
+			TokenId:          tokenId,
+			UseTimeSeconds:   0,
+			IsStream:         isStream,
+			Group:            usingGroup,
+			Other: map[string]interface{}{
+				"limit_blocked": true,
+				"limit_type":    exceeded.LimitType,
+				"period_type":   exceeded.PeriodType,
+				"used_value":    exceeded.UsedValue,
+				"limit_value":   exceeded.LimitValue,
+			},
+		})
 		newAPIError = types.NewOpenAIError(
 			errors.New("使用超限"),
 			types.ErrorCodeAccessDenied,
