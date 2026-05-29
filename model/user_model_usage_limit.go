@@ -184,7 +184,7 @@ func RecordUserModelUsageLimitHit(hit *UserModelUsageLimitHit) error {
 		hit.Username, _ = GetUsernameById(hit.UserId, false)
 	}
 	// 当前周期内只记录一次 hit，避免大量重复记录
-	periodStart := getPeriodStart(time.Now(), hit.PeriodType).Unix()
+	periodStart := getPeriodStart(time.Now(), hit.PeriodType).UnixMilli()
 	var existingCount int64
 	if err := DB.Model(&UserModelUsageLimitHit{}).
 		Where("user_id = ? AND model_name = ? AND limit_type = ? AND period_type = ? AND created_at >= ?",
