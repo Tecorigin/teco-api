@@ -20,7 +20,10 @@ var _bp = func() string {
 
 func RequestId() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		id := c.GetHeader("X-Request-Id")
+		id := ""
+		if common.ForwardClientXRequestIdEnabled {
+			id = c.GetHeader("X-Request-Id")
+		}
 		if id == "" {
 			id = common.GetTimeString() + _bp + common.GetRandomString(8)
 		}

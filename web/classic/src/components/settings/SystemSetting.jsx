@@ -72,6 +72,8 @@ const SystemSetting = () => {
     WorkerUrl: '',
     WorkerValidKey: '',
     WorkerAllowHttpImageRequestEnabled: '',
+    ForwardClientXRequestIdEnabled: '',
+    ForwardUpstreamXRequestIdEnabled: '',
     Footer: '',
     WeChatAuthEnabled: '',
     WeChatServerAddress: '',
@@ -190,6 +192,8 @@ const SystemSetting = () => {
           case 'passkey.enabled':
           case 'passkey.allow_insecure_origin':
           case 'WorkerAllowHttpImageRequestEnabled':
+          case 'ForwardClientXRequestIdEnabled':
+          case 'ForwardUpstreamXRequestIdEnabled':
             item.value = toBoolean(item.value);
             break;
           case 'passkey.origins':
@@ -306,6 +310,14 @@ const SystemSetting = () => {
       {
         key: 'WorkerAllowHttpImageRequestEnabled',
         value: inputs.WorkerAllowHttpImageRequestEnabled ? 'true' : 'false',
+      },
+      {
+        key: 'ForwardClientXRequestIdEnabled',
+        value: inputs.ForwardClientXRequestIdEnabled ? 'true' : 'false',
+      },
+      {
+        key: 'ForwardUpstreamXRequestIdEnabled',
+        value: inputs.ForwardUpstreamXRequestIdEnabled ? 'true' : 'false',
       },
     ];
     if (inputs.WorkerValidKey !== '' || WorkerUrl === '') {
@@ -779,6 +791,18 @@ const SystemSetting = () => {
                     noLabel
                   >
                     {t('允许 HTTP 协议图片请求（适用于自部署代理）')}
+                  </Form.Checkbox>
+                  <Form.Checkbox
+                    field='ForwardClientXRequestIdEnabled'
+                    noLabel
+                  >
+                    {t('透传客户端 X-Request-Id 到上游')}
+                  </Form.Checkbox>
+                  <Form.Checkbox
+                    field='ForwardUpstreamXRequestIdEnabled'
+                    noLabel
+                  >
+                    {t('透传上游 X-Request-Id 给前端')}
                   </Form.Checkbox>
                   <Button onClick={submitWorker}>{t('更新Worker设置')}</Button>
                 </Form.Section>

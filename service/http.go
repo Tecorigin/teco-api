@@ -35,7 +35,9 @@ func ShouldCopyUpstreamHeader(c *gin.Context, k string, v []string) bool {
 	if strings.EqualFold(k, common.RequestIdKey) || strings.EqualFold(k, "X-Request-Id") {
 		if c != nil && len(v) > 0 {
 			c.Set(common.UpstreamRequestIdKey, v[0])
-			c.Header("X-Request-Id", v[0])
+			if common.ForwardUpstreamXRequestIdEnabled {
+				c.Header("X-Request-Id", v[0])
+			}
 		}
 		return false
 	}

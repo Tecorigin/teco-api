@@ -38,6 +38,10 @@ const OPERATIONS_SECTIONS = [
           DefaultCollapseSidebar: settings.DefaultCollapseSidebar,
           DemoSiteEnabled: settings.DemoSiteEnabled,
           SelfUseModeEnabled: settings.SelfUseModeEnabled,
+          ForwardClientXRequestIdEnabled:
+            settings.ForwardClientXRequestIdEnabled,
+          ForwardUpstreamXRequestIdEnabled:
+            settings.ForwardUpstreamXRequestIdEnabled,
         }}
       />
     ),

@@ -52,6 +52,8 @@ const defaultOperationsSettings: OperationsSettings = {
   WorkerUrl: '',
   WorkerValidKey: '',
   WorkerAllowHttpImageRequestEnabled: false,
+  ForwardClientXRequestIdEnabled: false,
+  ForwardUpstreamXRequestIdEnabled: false,
   LogConsumeEnabled: false,
   'performance_setting.disk_cache_enabled': false,
   'performance_setting.disk_cache_threshold_mb': 10,

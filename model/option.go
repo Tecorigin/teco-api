@@ -73,6 +73,8 @@ func InitOptionMap() {
 	common.OptionMap["WorkerUrl"] = system_setting.WorkerUrl
 	common.OptionMap["WorkerValidKey"] = system_setting.WorkerValidKey
 	common.OptionMap["WorkerAllowHttpImageRequestEnabled"] = strconv.FormatBool(system_setting.WorkerAllowHttpImageRequestEnabled)
+	common.OptionMap["ForwardClientXRequestIdEnabled"] = strconv.FormatBool(common.ForwardClientXRequestIdEnabled)
+	common.OptionMap["ForwardUpstreamXRequestIdEnabled"] = strconv.FormatBool(common.ForwardUpstreamXRequestIdEnabled)
 	common.OptionMap["PayAddress"] = ""
 	common.OptionMap["CustomCallbackAddress"] = ""
 	common.OptionMap["EpayId"] = ""
@@ -279,6 +281,10 @@ func updateOptionMap(key string, value string) (err error) {
 			common.AutomaticEnableChannelEnabled = boolValue
 		case "LogConsumeEnabled":
 			common.LogConsumeEnabled = boolValue
+		case "ForwardClientXRequestIdEnabled":
+			common.ForwardClientXRequestIdEnabled = boolValue
+		case "ForwardUpstreamXRequestIdEnabled":
+			common.ForwardUpstreamXRequestIdEnabled = boolValue
 		case "DisplayInCurrencyEnabled":
 			// 兼容旧字段：同步到新配置 general_setting.quota_display_type（运行时生效）
 			// true -> USD, false -> TOKENS

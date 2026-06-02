@@ -37,9 +37,11 @@ func SetupApiRequestHeader(info *common.RelayInfo, c *gin.Context, req *http.Hea
 			req.Set("Accept", "text/event-stream")
 		}
 	}
-	requestId := strings.TrimSpace(c.GetString(common2.RequestIdKey))
-	if requestId != "" {
-		req.Set("X-Request-Id", requestId)
+	if common2.ForwardClientXRequestIdEnabled {
+		requestId := strings.TrimSpace(c.GetString(common2.RequestIdKey))
+		if requestId != "" {
+			req.Set("X-Request-Id", requestId)
+		}
 	}
 }
 
