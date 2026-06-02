@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/QuantumNous/new-api/dto"
@@ -91,7 +92,9 @@ func collectOpenAIResponsesTexts(req *dto.OpenAIResponsesRequest, userTexts, sys
 	for _, input := range req.ParseInput() {
 		switch input.Type {
 		case "input_text":
-			appendIfNotEmpty(userTexts, input.Text)
+			for _, text := range extractUserTextsFromInputText(input.Text) {
+				appendIfNotEmpty(userTexts, text)
+			}
 		case "input_file":
 			appendIfNotEmpty(otherTexts, input.FileUrl)
 		case "input_image":
@@ -214,6 +217,30 @@ func claudeMessageText(message dto.ClaudeMessage) string {
 		}
 	}
 	return strings.TrimSpace(strings.Join(parts, "\n"))
+}
+
+var userInputTagPattern = regexp.MustCompile(`(?is)<user_input>(.*?)</user_input>`)
+
+func extractUserTextsFromInputText(text string) []string {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return nil
+	}
+	matches := userInputTagPattern.FindAllStringSubmatch(trimmed, -1)
+	if len(matches) == 0 {
+		return []string{trimmed}
+	}
+	result := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		appendIfNotEmpty(&result, match[1])
+	}
+	if len(result) == 0 {
+		return []string{trimmed}
+	}
+	return result
 }
 
 func anyToStrings(value any) []string {

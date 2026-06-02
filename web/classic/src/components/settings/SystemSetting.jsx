@@ -74,6 +74,8 @@ const SystemSetting = () => {
     WorkerAllowHttpImageRequestEnabled: '',
     ForwardClientXRequestIdEnabled: '',
     ForwardUpstreamXRequestIdEnabled: '',
+    UserLogContentEnabled: '',
+    AdminLogContentEnabled: '',
     Footer: '',
     WeChatAuthEnabled: '',
     WeChatServerAddress: '',
@@ -194,6 +196,8 @@ const SystemSetting = () => {
           case 'WorkerAllowHttpImageRequestEnabled':
           case 'ForwardClientXRequestIdEnabled':
           case 'ForwardUpstreamXRequestIdEnabled':
+          case 'UserLogContentEnabled':
+          case 'AdminLogContentEnabled':
             item.value = toBoolean(item.value);
             break;
           case 'passkey.origins':
@@ -318,6 +322,14 @@ const SystemSetting = () => {
       {
         key: 'ForwardUpstreamXRequestIdEnabled',
         value: inputs.ForwardUpstreamXRequestIdEnabled ? 'true' : 'false',
+      },
+      {
+        key: 'UserLogContentEnabled',
+        value: inputs.UserLogContentEnabled ? 'true' : 'false',
+      },
+      {
+        key: 'AdminLogContentEnabled',
+        value: inputs.AdminLogContentEnabled ? 'true' : 'false',
       },
     ];
     if (inputs.WorkerValidKey !== '' || WorkerUrl === '') {
@@ -803,6 +815,18 @@ const SystemSetting = () => {
                     noLabel
                   >
                     {t('透传上游 X-Request-Id 给前端')}
+                  </Form.Checkbox>
+                  <Form.Checkbox
+                    field='UserLogContentEnabled'
+                    noLabel
+                  >
+                    {t('允许用户查看使用日志中的对话内容')}
+                  </Form.Checkbox>
+                  <Form.Checkbox
+                    field='AdminLogContentEnabled'
+                    noLabel
+                  >
+                    {t('允许管理员查看使用日志中的对话内容')}
                   </Form.Checkbox>
                   <Button onClick={submitWorker}>{t('更新Worker设置')}</Button>
                 </Form.Section>

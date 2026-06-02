@@ -42,6 +42,8 @@ const OPERATIONS_SECTIONS = [
             settings.ForwardClientXRequestIdEnabled,
           ForwardUpstreamXRequestIdEnabled:
             settings.ForwardUpstreamXRequestIdEnabled,
+          UserLogContentEnabled: settings.UserLogContentEnabled,
+          AdminLogContentEnabled: settings.AdminLogContentEnabled,
         }}
       />
     ),

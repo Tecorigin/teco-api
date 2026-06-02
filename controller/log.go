@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -9,6 +10,26 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+func hideLogContent(logs []*model.Log) {
+	for _, log := range logs {
+		if log == nil || log.Other == "" {
+			continue
+		}
+		var other map[string]interface{}
+		if err := json.Unmarshal([]byte(log.Other), &other); err != nil {
+			continue
+		}
+		delete(other, "audit_prompt")
+		delete(other, "audit_reply")
+		delete(other, "audit_prompt_raw")
+		payload, err := json.Marshal(other)
+		if err != nil {
+			continue
+		}
+		log.Other = string(payload)
+	}
+}
 
 func GetAllLogs(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
@@ -27,6 +48,12 @@ func GetAllLogs(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if !common.AdminLogContentEnabled {
+		hideLogContent(logs)
+	}
+	if !common.UserLogContentEnabled {
+		hideLogContent(logs)
 	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(logs)
@@ -50,6 +77,12 @@ func GetUserLogs(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if !common.AdminLogContentEnabled {
+		hideLogContent(logs)
+	}
+	if !common.UserLogContentEnabled {
+		hideLogContent(logs)
 	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(logs)

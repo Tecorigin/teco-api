@@ -299,6 +299,8 @@ export type OperationsSettings = {
   WorkerAllowHttpImageRequestEnabled: boolean
   ForwardClientXRequestIdEnabled: boolean
   ForwardUpstreamXRequestIdEnabled: boolean
+  UserLogContentEnabled: boolean
+  AdminLogContentEnabled: boolean
   LogConsumeEnabled: boolean
   'performance_setting.disk_cache_enabled': boolean
   'performance_setting.disk_cache_threshold_mb': number

@@ -43,6 +43,8 @@ const behaviorSchema = z.object({
   SelfUseModeEnabled: z.boolean(),
   ForwardClientXRequestIdEnabled: z.boolean(),
   ForwardUpstreamXRequestIdEnabled: z.boolean(),
+  UserLogContentEnabled: z.boolean(),
+  AdminLogContentEnabled: z.boolean(),
 })
 
 type BehaviorFormValues = z.infer<typeof behaviorSchema>
@@ -210,6 +212,52 @@ export function SystemBehaviorSection({
                   </FormLabel>
                   <FormDescription>
                     {t('Return the upstream X-Request-Id header back to the client response when available')}
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='UserLogContentEnabled'
+            render={({ field }) => (
+              <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                <div className='space-y-0.5'>
+                  <FormLabel className='text-base'>
+                    {t('Allow users to view log conversation content')}
+                  </FormLabel>
+                  <FormDescription>
+                    {t('Control whether users can see prompt and reply content in usage log details')}
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='AdminLogContentEnabled'
+            render={({ field }) => (
+              <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                <div className='space-y-0.5'>
+                  <FormLabel className='text-base'>
+                    {t('Allow admins to view log conversation content')}
+                  </FormLabel>
+                  <FormDescription>
+                    {t('Control whether admins can see prompt and reply content in usage log details')}
                   </FormDescription>
                 </div>
                 <FormControl>

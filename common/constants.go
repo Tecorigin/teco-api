@@ -115,6 +115,8 @@ var MemoryCacheEnabled bool
 var LogConsumeEnabled = true
 var ForwardClientXRequestIdEnabled = false
 var ForwardUpstreamXRequestIdEnabled = false
+var UserLogContentEnabled = false
+var AdminLogContentEnabled = true
 
 var TLSInsecureSkipVerify bool
 var InsecureTLSConfig = &tls.Config{InsecureSkipVerify: true}
