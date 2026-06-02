@@ -95,6 +95,9 @@ func collectOpenAIResponsesTexts(req *dto.OpenAIResponsesRequest, userTexts, sys
 			for _, text := range extractUserTextsFromInputText(input.Text) {
 				appendIfNotEmpty(userTexts, text)
 			}
+			for _, text := range extractSystemTextsFromInputText(input.Text) {
+				appendIfNotEmpty(systemTexts, text)
+			}
 		case "input_file":
 			appendIfNotEmpty(otherTexts, input.FileUrl)
 		case "input_image":
@@ -219,16 +222,52 @@ func claudeMessageText(message dto.ClaudeMessage) string {
 	return strings.TrimSpace(strings.Join(parts, "\n"))
 }
 
-var userInputTagPattern = regexp.MustCompile(`(?is)<user_input>(.*?)</user_input>`)
+var (
+	userInputTagPattern          = regexp.MustCompile(`(?is)<user_input>(.*?)</user_input>`)
+	assistantResponseTagPattern  = regexp.MustCompile(`(?is)<assistant_response>(.*?)</assistant_response>`)
+	environmentContextTagPattern = regexp.MustCompile(`(?is)<environment_context>(.*?)</environment_context>`)
+	systemReminderTagPattern     = regexp.MustCompile(`(?is)<system-reminder>(.*?)</system-reminder>`)
+	toolInstructionsTagPattern   = regexp.MustCompile(`(?is)<tool_instructions>(.*?)</tool_instructions>`)
+	instructionsTagPattern       = regexp.MustCompile(`(?is)<instructions>(.*?)</instructions>`)
+)
 
 func extractUserTextsFromInputText(text string) []string {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
 		return nil
 	}
-	matches := userInputTagPattern.FindAllStringSubmatch(trimmed, -1)
+	if texts := extractTaggedTexts(trimmed, userInputTagPattern); len(texts) > 0 {
+		return texts
+	}
+	cleaned := stripNonUserWrappedSections(trimmed)
+	if cleaned == "" {
+		return nil
+	}
+	return []string{cleaned}
+}
+
+func extractSystemTextsFromInputText(text string) []string {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return nil
+	}
+	patterns := []*regexp.Regexp{
+		instructionsTagPattern,
+		systemReminderTagPattern,
+		toolInstructionsTagPattern,
+		environmentContextTagPattern,
+	}
+	result := make([]string, 0)
+	for _, pattern := range patterns {
+		result = append(result, extractTaggedTexts(trimmed, pattern)...)
+	}
+	return result
+}
+
+func extractTaggedTexts(text string, pattern *regexp.Regexp) []string {
+	matches := pattern.FindAllStringSubmatch(text, -1)
 	if len(matches) == 0 {
-		return []string{trimmed}
+		return nil
 	}
 	result := make([]string, 0, len(matches))
 	for _, match := range matches {
@@ -237,10 +276,23 @@ func extractUserTextsFromInputText(text string) []string {
 		}
 		appendIfNotEmpty(&result, match[1])
 	}
-	if len(result) == 0 {
-		return []string{trimmed}
-	}
 	return result
+}
+
+func stripNonUserWrappedSections(text string) string {
+	cleaned := text
+	patterns := []*regexp.Regexp{
+		assistantResponseTagPattern,
+		environmentContextTagPattern,
+		systemReminderTagPattern,
+		toolInstructionsTagPattern,
+		instructionsTagPattern,
+	}
+	for _, pattern := range patterns {
+		cleaned = pattern.ReplaceAllString(cleaned, "")
+	}
+	cleaned = regexp.MustCompile(`(?is)</?[^>]+>`).ReplaceAllString(cleaned, "")
+	return strings.TrimSpace(cleaned)
 }
 
 func anyToStrings(value any) []string {
