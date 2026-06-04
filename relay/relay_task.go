@@ -19,6 +19,7 @@ import (
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -143,6 +144,7 @@ func ResolveOriginTask(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskErr
 // 控制器负责 defer Refund 和成功后 Settle。
 func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitResult, *dto.TaskError) {
 	info.InitChannelMeta(c)
+	var requestBody io.Reader
 
 	// 1. 确定 platform → 创建适配器 → 验证请求
 	platform := constant.TaskPlatform(c.GetString("platform"))
@@ -211,9 +213,17 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	}
 
 	// 8. 构建请求体
-	requestBody, err := adaptor.BuildRequestBody(c, info)
-	if err != nil {
-		return nil, service.TaskErrorWrapper(err, "build_request_failed", http.StatusInternalServerError)
+	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled {
+		storage, bodyErr := common.GetBodyStorage(c)
+		if bodyErr != nil {
+			return nil, service.TaskErrorWrapper(bodyErr, "read_request_body_failed", http.StatusBadRequest)
+		}
+		requestBody = common.ReaderOnly(storage)
+	} else {
+		requestBody, err = adaptor.BuildRequestBody(c, info)
+		if err != nil {
+			return nil, service.TaskErrorWrapper(err, "build_request_failed", http.StatusInternalServerError)
+		}
 	}
 
 	// 9. 发送请求

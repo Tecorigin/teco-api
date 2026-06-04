@@ -27,6 +27,7 @@ import (
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/samber/lo"
+	"github.com/tidwall/gjson"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -661,6 +662,13 @@ func RelayTask(c *gin.Context) {
 		task.Quota = result.Quota
 		task.Data = result.TaskData
 		task.Action = relayInfo.Action
+					if gjson.GetBytes(task.Data, "status").String() == dto.VideoStatusCompleted {
+						task.Status = model.TaskStatusSuccess
+						task.Progress = "100%"
+						if url := gjson.GetBytes(task.Data, "metadata.url").String(); url != "" {
+							task.PrivateData.ResultURL = url
+						}
+					}
 		if insertErr := task.Insert(); insertErr != nil {
 			common.SysError("insert task error: " + insertErr.Error())
 		}

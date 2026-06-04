@@ -635,6 +635,36 @@ export const getLogsColumns = ({
       },
     },
     {
+      key: COLUMN_KEYS.REQUEST_ID,
+      title: t('Request ID'),
+      dataIndex: 'request_id',
+      render: (text, record) => {
+        return record.type === 0 ||
+          record.type === 2 ||
+          record.type === 5 ||
+          record.type === 6 ? (
+          text ? (
+            <Typography.Paragraph
+              copyable={{ text }}
+              ellipsis={{
+                rows: 1,
+                showTooltip: {
+                  type: 'tooltip',
+                },
+              }}
+              style={{ maxWidth: 220, marginBottom: 0, fontFamily: 'monospace' }}
+            >
+              {text}
+            </Typography.Paragraph>
+          ) : (
+            <></>
+          )
+        ) : (
+          <></>
+        );
+      },
+    },
+    {
       key: COLUMN_KEYS.GROUP,
       title: t('分组'),
       dataIndex: 'group',

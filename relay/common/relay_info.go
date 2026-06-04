@@ -741,20 +741,40 @@ func (t *TaskSubmitReq) UnmarshalJSON(data []byte) error {
 		}
 	}
 
+	metadata := map[string]interface{}{}
 	if len(aux.Metadata) > 0 {
 		var metadataStr string
 		if err := common.Unmarshal(aux.Metadata, &metadataStr); err == nil && metadataStr != "" {
 			var metadataObj map[string]interface{}
 			if err := common.Unmarshal([]byte(metadataStr), &metadataObj); err == nil {
-				t.Metadata = metadataObj
-				return nil
+				for k, v := range metadataObj {
+					metadata[k] = v
+				}
 			}
 		}
 
 		var metadataObj map[string]interface{}
 		if err := common.Unmarshal(aux.Metadata, &metadataObj); err == nil {
-			t.Metadata = metadataObj
+			for k, v := range metadataObj {
+				metadata[k] = v
+			}
 		}
+	}
+
+	var raw map[string]interface{}
+	if err := common.Unmarshal(data, &raw); err == nil {
+		for k, v := range raw {
+			if k == "metadata" {
+				continue
+			}
+			if !isKnownTaskField(k) {
+				metadata[k] = v
+			}
+		}
+	}
+
+	if len(metadata) > 0 {
+		t.Metadata = metadata
 	}
 
 	return nil

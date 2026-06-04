@@ -228,7 +228,10 @@ export async function handleTestChannel(
     const response = await testChannel(id, payload)
     if (response.success) {
       toast.success(i18next.t(SUCCESS_MESSAGES.TESTED))
-      onTestComplete?.(true, response.data?.response_time)
+      onTestComplete?.(
+        true,
+        response.data?.response_time ?? (response as { time?: number }).time
+      )
     } else {
       toast.error(response.message || i18next.t(ERROR_MESSAGES.TEST_FAILED))
       onTestComplete?.(false, undefined, response.message, response.error_code)

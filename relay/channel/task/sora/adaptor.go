@@ -21,6 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
 
@@ -55,6 +56,14 @@ type responseTask struct {
 		Message string `json:"message"`
 		Code    string `json:"code"`
 	} `json:"error,omitempty"`
+}
+
+type syncVideoResponse struct {
+	Created     int64 `json:"created"`
+	ElapsedTime string `json:"elapsed_time,omitempty"`
+	Data        []struct {
+		URL string `json:"url"`
+	} `json:"data,omitempty"`
 }
 
 // ============================
@@ -130,10 +139,21 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
-	if info.Action == constant.TaskActionRemix {
-		return fmt.Sprintf("%s/v1/videos/%s/remix", a.baseURL, info.OriginTaskID), nil
+	joinOpenAIPath := func(baseURL, requestPath string) string {
+		base := strings.TrimSuffix(baseURL, "/")
+		if strings.HasSuffix(base, "/v1") && strings.HasPrefix(requestPath, "/v1/") {
+			requestPath = strings.TrimPrefix(requestPath, "/v1")
+		}
+		return base + requestPath
 	}
-	return fmt.Sprintf("%s/v1/videos", a.baseURL), nil
+
+	if info.Action == constant.TaskActionRemix {
+		return joinOpenAIPath(a.baseURL, fmt.Sprintf("/v1/videos/%s/remix", info.OriginTaskID)), nil
+	}
+	if strings.HasPrefix(info.RequestURLPath, "/v1/videos/generations") {
+		return joinOpenAIPath(a.baseURL, "/v1/videos/generations"), nil
+	}
+	return joinOpenAIPath(a.baseURL, "/v1/videos"), nil
 }
 
 // BuildRequestHeader sets required headers.
@@ -233,6 +253,25 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 	}
 	_ = resp.Body.Close()
 
+	if strings.HasPrefix(info.RequestURLPath, "/v1/videos/generations") {
+		contentType := resp.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = "application/json; charset=utf-8"
+		}
+		c.Data(http.StatusOK, contentType, responseBody)
+
+		upstreamID := extractTaskIDFromResponseBody(responseBody)
+		if upstreamID != "" {
+			return upstreamID, responseBody, nil
+		}
+
+		internalTaskData, buildErr := buildCompletedTaskDataForSyncResponse(info, responseBody)
+		if buildErr != nil {
+			return info.PublicTaskID, responseBody, nil
+		}
+		return info.PublicTaskID, internalTaskData, nil
+	}
+
 	// Parse Sora response
 	var dResp responseTask
 	if err := common.Unmarshal(responseBody, &dResp); err != nil {
@@ -245,8 +284,44 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		upstreamID = dResp.TaskID
 	}
 	if upstreamID == "" {
-		taskErr = service.TaskErrorWrapper(fmt.Errorf("task_id is empty"), "invalid_response", http.StatusInternalServerError)
-		return
+		// Some providers return sync-completed payloads like:
+		// {"created":...,"data":[{"url":"..."}],...}
+		// without id/task_id. Treat it as a completed task.
+		var syncResp syncVideoResponse
+		if err := common.Unmarshal(responseBody, &syncResp); err != nil {
+			taskErr = service.TaskErrorWrapper(fmt.Errorf("task_id is empty"), "invalid_response", http.StatusInternalServerError)
+			return
+		}
+		if len(syncResp.Data) == 0 || strings.TrimSpace(syncResp.Data[0].URL) == "" {
+			taskErr = service.TaskErrorWrapper(fmt.Errorf("task_id is empty"), "invalid_response", http.StatusInternalServerError)
+			return
+		}
+
+		openAIResp := dto.NewOpenAIVideo()
+		openAIResp.ID = info.PublicTaskID
+		openAIResp.TaskID = info.PublicTaskID
+		openAIResp.Model = info.OriginModelName
+		openAIResp.Status = dto.VideoStatusCompleted
+		openAIResp.Progress = 100
+		if syncResp.Created > 0 {
+			openAIResp.CreatedAt = syncResp.Created
+		} else {
+			openAIResp.CreatedAt = common.GetTimestamp()
+		}
+		openAIResp.CompletedAt = common.GetTimestamp()
+		openAIResp.SetMetadata("url", syncResp.Data[0].URL)
+		if syncResp.ElapsedTime != "" {
+			openAIResp.SetMetadata("elapsed_time", syncResp.ElapsedTime)
+		}
+
+		openAIBody, marshalErr := common.Marshal(openAIResp)
+		if marshalErr != nil {
+			taskErr = service.TaskErrorWrapper(marshalErr, "marshal_response_body_failed", http.StatusInternalServerError)
+			return
+		}
+
+		c.JSON(http.StatusOK, openAIResp)
+		return info.PublicTaskID, openAIBody, nil
 	}
 
 	// 使用公开 task_xxxx ID 返回给客户端
@@ -318,6 +393,15 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Progress = fmt.Sprintf("%d%%", resTask.Progress)
 	}
 
+	if taskResult.Status == "" {
+		var syncResp syncVideoResponse
+		if err := common.Unmarshal(respBody, &syncResp); err == nil && len(syncResp.Data) > 0 && strings.TrimSpace(syncResp.Data[0].URL) != "" {
+			taskResult.Status = model.TaskStatusSuccess
+			taskResult.Progress = "100%"
+			taskResult.Url = syncResp.Data[0].URL
+		}
+	}
+
 	return &taskResult, nil
 }
 
@@ -328,4 +412,43 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(task *model.Task) ([]byte, error) {
 		return nil, errors.Wrap(err, "set id failed")
 	}
 	return data, nil
+}
+
+func extractTaskIDFromResponseBody(responseBody []byte) string {
+	candidates := []string{
+		"id",
+		"task_id",
+		"output.task_id",
+		"data.0.id",
+		"data.task_id",
+	}
+	for _, path := range candidates {
+		if val := strings.TrimSpace(gjson.GetBytes(responseBody, path).String()); val != "" {
+			return val
+		}
+	}
+	return ""
+}
+
+func buildCompletedTaskDataForSyncResponse(info *relaycommon.RelayInfo, responseBody []byte) ([]byte, error) {
+	openAIResp := dto.NewOpenAIVideo()
+	openAIResp.ID = info.PublicTaskID
+	openAIResp.TaskID = info.PublicTaskID
+	openAIResp.Model = info.OriginModelName
+	openAIResp.Status = dto.VideoStatusCompleted
+	openAIResp.Progress = 100
+	openAIResp.CreatedAt = common.GetTimestamp()
+	openAIResp.CompletedAt = common.GetTimestamp()
+
+	if created := gjson.GetBytes(responseBody, "created").Int(); created > 0 {
+		openAIResp.CreatedAt = created
+	}
+	if url := strings.TrimSpace(gjson.GetBytes(responseBody, "data.0.url").String()); url != "" {
+		openAIResp.SetMetadata("url", url)
+	}
+	if elapsed := strings.TrimSpace(gjson.GetBytes(responseBody, "elapsed_time").String()); elapsed != "" {
+		openAIResp.SetMetadata("elapsed_time", elapsed)
+	}
+
+	return common.Marshal(openAIResp)
 }

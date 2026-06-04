@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -175,6 +176,17 @@ func getModelFromRequest(c *gin.Context) (*ModelRequest, error) {
 	if err != nil {
 		return nil, errors.New(i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
 	}
+	if modelRequest.Model == "" {
+		var raw map[string]any
+		if rawErr := common.UnmarshalBodyReusable(c, &raw); rawErr == nil {
+			if model, ok := raw["model"].(string); ok {
+				modelRequest.Model = model
+			}
+			if group, ok := raw["group"].(string); ok {
+				modelRequest.Group = group
+			}
+		}
+	}
 	return &modelRequest, nil
 }
 
@@ -225,22 +237,16 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		relayMode := relayconstant.RelayModeVideoSubmit
 		c.Set("relay_mode", relayMode)
 		shouldSelectChannel = false
-	} else if strings.Contains(c.Request.URL.Path, "/v1/videos") {
-		//curl https://api.openai.com/v1/videos \
-		//  -H "Authorization: Bearer $OPENAI_API_KEY" \
-		//  -F "model=sora-2" \
-		//  -F "prompt=A calico cat playing a piano on stage"
-		//	-F input_reference="@image.jpg"
+	} else if strings.HasPrefix(c.Request.URL.Path, "/v1/videos") {
+		// Video task requests should parse model from task payload directly instead of generic ModelRequest.
 		relayMode := relayconstant.RelayModeUnknown
 		if c.Request.Method == http.MethodPost {
 			relayMode = relayconstant.RelayModeVideoSubmit
-			req, err := getModelFromRequest(c)
-			if err != nil {
-				return nil, false, err
+			var req relaycommon.TaskSubmitReq
+			if err := common.UnmarshalBodyReusable(c, &req); err != nil {
+				return nil, false, errors.New(i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
 			}
-			if req != nil {
-				modelRequest.Model = req.Model
-			}
+			modelRequest.Model = strings.TrimSpace(req.Model)
 		} else if c.Request.Method == http.MethodGet {
 			relayMode = relayconstant.RelayModeVideoFetchByID
 			shouldSelectChannel = false
@@ -249,11 +255,11 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 	} else if strings.Contains(c.Request.URL.Path, "/v1/video/generations") {
 		relayMode := relayconstant.RelayModeUnknown
 		if c.Request.Method == http.MethodPost {
-			req, err := getModelFromRequest(c)
-			if err != nil {
-				return nil, false, err
+			var req relaycommon.TaskSubmitReq
+			if err := common.UnmarshalBodyReusable(c, &req); err != nil {
+				return nil, false, errors.New(i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
 			}
-			modelRequest.Model = req.Model
+			modelRequest.Model = strings.TrimSpace(req.Model)
 			relayMode = relayconstant.RelayModeVideoSubmit
 		} else if c.Request.Method == http.MethodGet {
 			relayMode = relayconstant.RelayModeVideoFetchByID
@@ -293,6 +299,10 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 	}
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/images/generations") {
 		modelRequest.Model = common.GetStringIfEmpty(modelRequest.Model, "dall-e")
+	} else if strings.HasPrefix(c.Request.URL.Path, "/v1/videos/generations") || c.Request.URL.Path == "/v1/videos" || strings.HasPrefix(c.Request.URL.Path, "/v1/video/generations") {
+		if req, err := getModelFromRequest(c); err == nil && req.Model != "" {
+			modelRequest.Model = req.Model
+		}
 	} else if strings.HasPrefix(c.Request.URL.Path, "/v1/images/edits") {
 		//modelRequest.Model = common.GetStringIfEmpty(c.PostForm("model"), "gpt-image-1")
 		contentType := c.ContentType()

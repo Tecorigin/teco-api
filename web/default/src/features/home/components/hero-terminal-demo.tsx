@@ -158,6 +158,50 @@ const API_DEMOS: ApiDemoConfig[] = [
     latency: 93,
     accent: 'violet',
   },
+  {
+    id: 'image',
+    label: 'Image',
+    method: 'POST',
+    endpoint: '/v1/images/generations',
+    headers: ['"Authorization: Bearer sk-••••"'],
+    request: [
+      '"model": "your-image-model",',
+      '"prompt": "...",',
+      '"size": "1024x1024"',
+    ],
+    response: [
+      '{',
+      '  "data": [{ "url": <url> }],',
+      '  "created": <timestamp>',
+      '}',
+    ],
+    responseHighlights: ['<url>', '<timestamp>'],
+    tokens: 1,
+    latency: 238,
+    accent: 'emerald',
+  },
+  {
+    id: 'video',
+    label: 'Video',
+    method: 'POST',
+    endpoint: '/v1/videos/generations',
+    headers: ['"Authorization: Bearer sk-••••"'],
+    request: [
+      '"model": "your-video-model",',
+      '"prompt": "...",',
+      '"duration": 5',
+    ],
+    response: [
+      '{',
+      '  "task_id": <task_id>,',
+      '  "status": <status>',
+      '}',
+    ],
+    responseHighlights: ['<task_id>', '<status>'],
+    tokens: 1,
+    latency: 312,
+    accent: 'blue',
+  },
 ]
 
 const CYCLE_INTERVAL = 4500
@@ -428,6 +472,26 @@ function renderResponseLine(line: string, demo: ApiDemoConfig): ReactNode {
           {Math.ceil(demo.tokens * 0.6)}
         </NumberText>
       )
+    } else if (placeholder === '<url>') {
+      segments.push(
+        <Accent key={`ph-${idx}`} accent={demo.accent}>
+          {'"https://cdn.example.com/output.png"'}
+        </Accent>
+      )
+    } else if (placeholder === '<timestamp>') {
+      segments.push(<NumberText key={`ph-${idx}`}>1712345678</NumberText>)
+    } else if (placeholder === '<task_id>') {
+      segments.push(
+        <Accent key={`ph-${idx}`} accent={demo.accent}>
+          {'"vid_task_01HXYZABC123"'}
+        </Accent>
+      )
+    } else if (placeholder === '<status>') {
+      segments.push(
+        <Accent key={`ph-${idx}`} accent={demo.accent}>
+          {'"queued"'}
+        </Accent>
+      )
     } else {
       segments.push(<Muted key={`ph-${idx}`}>{placeholder}</Muted>)
     }
@@ -447,6 +511,8 @@ function truncateResponse(demo: ApiDemoConfig): string {
     responses: 'Response workflow ready.',
     claude: 'Claude message routed.',
     gemini: 'Gemini request served.',
+    image: 'Image generation queued.',
+    video: 'Video generation task accepted.',
   }
   return map[demo.id] ?? '...'
 }

@@ -489,6 +489,31 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
     size: 130,
   })
 
+  columns.push({
+    accessorKey: 'request_id',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title={t('Request ID')} />
+    ),
+    cell: function RequestIdCell({ row }) {
+      const log = row.original
+      if (!isDisplayableLogType(log.type) || !log.request_id) return null
+
+      return (
+        <div className='max-w-[220px]'>
+          <StatusBadge
+            label={log.request_id}
+            copyText={log.request_id}
+            size='sm'
+            showDot={false}
+            className='border-border/60 bg-muted/30 text-foreground max-w-full overflow-hidden rounded-md border px-1.5 py-0.5 font-mono'
+          />
+        </div>
+      )
+    },
+    meta: { label: t('Request ID'), mobileHidden: true },
+    size: 180,
+  })
+
   columns.push(
     {
       accessorKey: 'model_name',
