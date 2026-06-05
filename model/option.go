@@ -161,6 +161,8 @@ func InitOptionMap() {
 	//common.OptionMap["ChatLink2"] = common.ChatLink2
 	common.OptionMap["QuotaPerUnit"] = strconv.FormatFloat(common.QuotaPerUnit, 'f', -1, 64)
 	common.OptionMap["RetryTimes"] = strconv.Itoa(common.RetryTimes)
+	common.OptionMap["RetryTimes4xx"] = strconv.Itoa(common.RetryTimes4xx)
+	common.OptionMap["RetryTimes5xx"] = strconv.Itoa(common.RetryTimes5xx)
 	common.OptionMap["DataExportInterval"] = strconv.Itoa(common.DataExportInterval)
 	common.OptionMap["DataExportDefaultTime"] = common.DataExportDefaultTime
 	common.OptionMap["DefaultCollapseSidebar"] = strconv.FormatBool(common.DefaultCollapseSidebar)
@@ -510,7 +512,24 @@ func updateOptionMap(key string, value string) (err error) {
 	case "ModelRequestRateLimitGroup":
 		err = setting.UpdateModelRequestRateLimitGroupByJSONString(value)
 	case "RetryTimes":
-		common.RetryTimes, _ = strconv.Atoi(value)
+		parsed, _ := strconv.Atoi(value)
+		common.RetryTimes = parsed
+		common.RetryTimes4xx = parsed
+		common.RetryTimes5xx = parsed
+	case "RetryTimes4xx":
+		common.RetryTimes4xx, _ = strconv.Atoi(value)
+		if common.RetryTimes4xx > common.RetryTimes5xx {
+			common.RetryTimes = common.RetryTimes4xx
+		} else {
+			common.RetryTimes = common.RetryTimes5xx
+		}
+	case "RetryTimes5xx":
+		common.RetryTimes5xx, _ = strconv.Atoi(value)
+		if common.RetryTimes4xx > common.RetryTimes5xx {
+			common.RetryTimes = common.RetryTimes4xx
+		} else {
+			common.RetryTimes = common.RetryTimes5xx
+		}
 	case "DataExportInterval":
 		common.DataExportInterval, _ = strconv.Atoi(value)
 	case "DataExportDefaultTime":

@@ -28,7 +28,8 @@ import {
 } from './section-registry.tsx'
 
 const defaultOperationsSettings: OperationsSettings = {
-  RetryTimes: 0,
+  RetryTimes4xx: 0,
+  RetryTimes5xx: 0,
   DefaultCollapseSidebar: false,
   DemoSiteEnabled: false,
   SelfUseModeEnabled: false,
