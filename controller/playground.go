@@ -13,6 +13,18 @@ import (
 )
 
 func Playground(c *gin.Context) {
+	playgroundRelay(c, types.RelayFormatOpenAI)
+}
+
+func PlaygroundImageGeneration(c *gin.Context) {
+	playgroundRelay(c, types.RelayFormatOpenAIImage)
+}
+
+func PlaygroundVideoGeneration(c *gin.Context) {
+	playgroundRelay(c, types.RelayFormatTask)
+}
+
+func playgroundRelay(c *gin.Context, relayFormat types.RelayFormat) {
 	var newAPIError *types.NewAPIError
 
 	defer func() {
@@ -29,7 +41,7 @@ func Playground(c *gin.Context) {
 		return
 	}
 
-	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatOpenAI, nil, nil)
+	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, nil, nil)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
 		return
@@ -52,5 +64,10 @@ func Playground(c *gin.Context) {
 	}
 	_ = middleware.SetupContextForToken(c, tempToken)
 
-	Relay(c, types.RelayFormatOpenAI)
+	if relayFormat == types.RelayFormatTask {
+		RelayTask(c)
+		return
+	}
+
+	Relay(c, relayFormat)
 }

@@ -103,6 +103,8 @@ type ExtendedModelFormValues = z.infer<typeof extendedModelFormSchema>
 type PricingMode = 'per-token' | 'per-request'
 type PricingSubMode = 'ratio' | 'price'
 
+const TAG_QUICK_ACTIONS = ['文生图', '文生视频'] as const
+
 type ModelMutateDrawerProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -250,6 +252,21 @@ export function ModelMutateDrawer({
       form.setValue('completionRatio', '')
     }
   }
+
+  const appendTag = useCallback(
+    (tag: string) => {
+      const currentTags = form.getValues('tags') || []
+      if (currentTags.includes(tag)) {
+        return
+      }
+      form.setValue('tags', [...currentTags, tag], {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      })
+    },
+    [form]
+  )
 
   // Load model data for editing and ratio configuration
   useEffect(() => {
@@ -767,6 +784,19 @@ export function ModelMutateDrawer({
                         placeholder={t('Add tags...')}
                       />
                     </FormControl>
+                    <div className='flex flex-wrap gap-2'>
+                      {TAG_QUICK_ACTIONS.map((tag) => (
+                        <Button
+                          key={tag}
+                          type='button'
+                          variant='outline'
+                          size='sm'
+                          onClick={() => appendTag(tag)}
+                        >
+                          {tag}
+                        </Button>
+                      ))}
+                    </div>
                     <FormDescription>
                       {t('Press Enter or comma to add tags')}
                     </FormDescription>

@@ -59,12 +59,28 @@ func SetRelayRouter(router *gin.Engine) {
 		})
 	}
 
-	playgroundRouter := router.Group("/pg")
-	playgroundRouter.Use(middleware.RouteTag("relay"))
-	playgroundRouter.Use(middleware.SystemPerformanceCheck())
-	playgroundRouter.Use(middleware.UserAuth(), middleware.Distribute())
+	playgroundChatRouter := router.Group("/pg")
+	playgroundChatRouter.Use(middleware.RouteTag("relay"))
+	playgroundChatRouter.Use(middleware.SystemPerformanceCheck())
+	playgroundChatRouter.Use(middleware.UserAuth(), middleware.Distribute())
 	{
-		playgroundRouter.POST("/chat/completions", controller.Playground)
+		playgroundChatRouter.POST("/chat/completions", controller.Playground)
+	}
+
+	playgroundImageRouter := router.Group("/pg")
+	playgroundImageRouter.Use(middleware.RouteTag("relay"))
+	playgroundImageRouter.Use(middleware.SystemPerformanceCheck())
+	playgroundImageRouter.Use(middleware.UserAuth(), middleware.Distribute())
+	{
+		playgroundImageRouter.POST("/images/generations", controller.PlaygroundImageGeneration)
+	}
+	playgroundVideoRouter := router.Group("/pg")
+	playgroundVideoRouter.Use(middleware.RouteTag("relay"))
+	playgroundVideoRouter.Use(middleware.SystemPerformanceCheck())
+	playgroundVideoRouter.Use(middleware.UserAuth(), middleware.Distribute())
+	{
+		playgroundVideoRouter.POST("/videos", controller.RelayTask)
+		playgroundVideoRouter.POST("/videos/generations", controller.RelayTask)
 	}
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))

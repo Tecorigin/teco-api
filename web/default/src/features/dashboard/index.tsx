@@ -59,6 +59,12 @@ const LazyModelCharts = lazy(() =>
   }))
 )
 
+const LazyModelTokenStats = lazy(() =>
+  import('./components/models/model-token-stats').then((m) => ({
+    default: m.ModelTokenStats,
+  }))
+)
+
 const LazyConsumptionDistributionChart = lazy(() =>
   import('./components/models/consumption-distribution-chart').then((m) => ({
     default: m.ConsumptionDistributionChart,
@@ -295,6 +301,14 @@ export function Dashboard() {
                     timeGranularity={
                       modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
                     }
+                  />
+                </Suspense>
+              </FadeIn>
+              <FadeIn delay={0.2}>
+                <Suspense fallback={<ModelChartsFallback />}>
+                  <LazyModelTokenStats
+                    filters={modelFilters}
+                    isAdmin={isAdmin}
                   />
                 </Suspense>
               </FadeIn>

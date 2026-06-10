@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -17,18 +16,25 @@ func hideLogContent(logs []*model.Log) {
 			continue
 		}
 		var other map[string]interface{}
-		if err := json.Unmarshal([]byte(log.Other), &other); err != nil {
+		if err := common.UnmarshalJsonStr(log.Other, &other); err != nil {
 			continue
 		}
 		delete(other, "audit_prompt")
 		delete(other, "audit_reply")
 		delete(other, "audit_prompt_raw")
-		payload, err := json.Marshal(other)
+		payload, err := common.Marshal(other)
 		if err != nil {
 			continue
 		}
 		log.Other = string(payload)
 	}
+}
+
+func shouldHideLogContentByRole(role int) bool {
+	if role >= common.RoleAdminUser {
+		return !common.AdminLogContentEnabled
+	}
+	return !common.UserLogContentEnabled
 }
 
 func GetAllLogs(c *gin.Context) {
@@ -49,10 +55,7 @@ func GetAllLogs(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if !common.AdminLogContentEnabled {
-		hideLogContent(logs)
-	}
-	if !common.UserLogContentEnabled {
+	if shouldHideLogContentByRole(c.GetInt("role")) {
 		hideLogContent(logs)
 	}
 	pageInfo.SetTotal(int(total))
@@ -78,10 +81,7 @@ func GetUserLogs(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if !common.AdminLogContentEnabled {
-		hideLogContent(logs)
-	}
-	if !common.UserLogContentEnabled {
+	if shouldHideLogContentByRole(c.GetInt("role")) {
 		hideLogContent(logs)
 	}
 	pageInfo.SetTotal(int(total))

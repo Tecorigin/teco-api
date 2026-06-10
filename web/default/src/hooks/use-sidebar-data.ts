@@ -29,10 +29,12 @@ import {
   Command,
   Radio,
   FlaskConical,
+  Image,
   MessageSquare,
   CreditCard,
   ListTodo,
   Settings,
+  Video,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
@@ -53,12 +55,22 @@ export function useSidebarData(): SidebarData {
     navGroups: [
       {
         id: 'chat',
-        title: t('Chat'),
+        title: t('Model Experience'),
         items: [
           {
-            title: t('Playground'),
+            title: t('Text Models'),
             url: '/playground',
             icon: FlaskConical,
+          },
+          {
+            title: t('Text-to-Image'),
+            url: '/image-generation',
+            icon: Image,
+          },
+          {
+            title: t('Text-to-Video'),
+            url: '/video-generation',
+            icon: Video,
           },
           {
             title: t('Chat'),

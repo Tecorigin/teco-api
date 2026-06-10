@@ -51,6 +51,9 @@ type responseTask struct {
 	ExpiresAt          int64  `json:"expires_at,omitempty"`
 	Seconds            string `json:"seconds,omitempty"`
 	Size               string `json:"size,omitempty"`
+	Prompt             string `json:"prompt,omitempty"`
+	URL                string `json:"url,omitempty"`
+	DownloadURL        string `json:"download_url,omitempty"`
 	RemixedFromVideoID string `json:"remixed_from_video_id,omitempty"`
 	Error              *struct {
 		Message string `json:"message"`
@@ -62,7 +65,8 @@ type syncVideoResponse struct {
 	Created     int64 `json:"created"`
 	ElapsedTime string `json:"elapsed_time,omitempty"`
 	Data        []struct {
-		URL string `json:"url"`
+		URL         string `json:"url"`
+		DownloadURL string `json:"download_url"`
 	} `json:"data,omitempty"`
 }
 
@@ -283,6 +287,35 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 	if upstreamID == "" {
 		upstreamID = dResp.TaskID
 	}
+	if dResp.Status == dto.VideoStatusCompleted {
+		resultURL := firstNonEmptyString(dResp.DownloadURL, dResp.URL)
+		if resultURL != "" {
+			openAIResp := dto.NewOpenAIVideo()
+			openAIResp.ID = info.PublicTaskID
+			openAIResp.TaskID = info.PublicTaskID
+			openAIResp.Model = firstNonEmptyString(dResp.Model, info.OriginModelName)
+			openAIResp.Status = dto.VideoStatusCompleted
+			openAIResp.Progress = 100
+			openAIResp.CreatedAt = dResp.CreatedAt
+			openAIResp.CompletedAt = dResp.CompletedAt
+			openAIResp.ExpiresAt = dResp.ExpiresAt
+			openAIResp.Seconds = dResp.Seconds
+			openAIResp.Size = dResp.Size
+			openAIResp.URL = resultURL
+			openAIResp.DownloadURL = resultURL
+			openAIResp.SetMetadata("url", resultURL)
+			openAIResp.SetMetadata("download_url", resultURL)
+
+			openAIBody, marshalErr := common.Marshal(openAIResp)
+			if marshalErr != nil {
+				taskErr = service.TaskErrorWrapper(marshalErr, "marshal_response_body_failed", http.StatusInternalServerError)
+				return
+			}
+
+			c.JSON(http.StatusOK, openAIResp)
+			return info.PublicTaskID, openAIBody, nil
+		}
+	}
 	if upstreamID == "" {
 		// Some providers return sync-completed payloads like:
 		// {"created":...,"data":[{"url":"..."}],...}
@@ -292,7 +325,8 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 			taskErr = service.TaskErrorWrapper(fmt.Errorf("task_id is empty"), "invalid_response", http.StatusInternalServerError)
 			return
 		}
-		if len(syncResp.Data) == 0 || strings.TrimSpace(syncResp.Data[0].URL) == "" {
+		resultURL := firstNonEmptyString(syncResp.Data[0].DownloadURL, syncResp.Data[0].URL)
+		if len(syncResp.Data) == 0 || strings.TrimSpace(resultURL) == "" {
 			taskErr = service.TaskErrorWrapper(fmt.Errorf("task_id is empty"), "invalid_response", http.StatusInternalServerError)
 			return
 		}
@@ -309,7 +343,10 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 			openAIResp.CreatedAt = common.GetTimestamp()
 		}
 		openAIResp.CompletedAt = common.GetTimestamp()
-		openAIResp.SetMetadata("url", syncResp.Data[0].URL)
+		openAIResp.URL = resultURL
+		openAIResp.DownloadURL = resultURL
+		openAIResp.SetMetadata("url", resultURL)
+		openAIResp.SetMetadata("download_url", resultURL)
 		if syncResp.ElapsedTime != "" {
 			openAIResp.SetMetadata("elapsed_time", syncResp.ElapsedTime)
 		}
@@ -379,7 +416,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Status = model.TaskStatusInProgress
 	case "completed":
 		taskResult.Status = model.TaskStatusSuccess
-		// Url intentionally left empty — the caller constructs the proxy URL using the public task ID
+		taskResult.Url = firstNonEmptyString(resTask.DownloadURL, resTask.URL)
 	case "failed", "cancelled":
 		taskResult.Status = model.TaskStatusFailure
 		if resTask.Error != nil {
@@ -395,10 +432,14 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 
 	if taskResult.Status == "" {
 		var syncResp syncVideoResponse
-		if err := common.Unmarshal(respBody, &syncResp); err == nil && len(syncResp.Data) > 0 && strings.TrimSpace(syncResp.Data[0].URL) != "" {
+		if err := common.Unmarshal(respBody, &syncResp); err == nil && len(syncResp.Data) > 0 {
+			resultURL := firstNonEmptyString(syncResp.Data[0].DownloadURL, syncResp.Data[0].URL)
+			if strings.TrimSpace(resultURL) == "" {
+				return &taskResult, nil
+			}
 			taskResult.Status = model.TaskStatusSuccess
 			taskResult.Progress = "100%"
-			taskResult.Url = syncResp.Data[0].URL
+			taskResult.Url = resultURL
 		}
 	}
 
@@ -443,12 +484,27 @@ func buildCompletedTaskDataForSyncResponse(info *relaycommon.RelayInfo, response
 	if created := gjson.GetBytes(responseBody, "created").Int(); created > 0 {
 		openAIResp.CreatedAt = created
 	}
-	if url := strings.TrimSpace(gjson.GetBytes(responseBody, "data.0.url").String()); url != "" {
-		openAIResp.SetMetadata("url", url)
+	if resultURL := firstNonEmptyString(
+		strings.TrimSpace(gjson.GetBytes(responseBody, "data.0.download_url").String()),
+		strings.TrimSpace(gjson.GetBytes(responseBody, "data.0.url").String()),
+	); resultURL != "" {
+		openAIResp.URL = resultURL
+		openAIResp.DownloadURL = resultURL
+		openAIResp.SetMetadata("url", resultURL)
+		openAIResp.SetMetadata("download_url", resultURL)
 	}
 	if elapsed := strings.TrimSpace(gjson.GetBytes(responseBody, "elapsed_time").String()); elapsed != "" {
 		openAIResp.SetMetadata("elapsed_time", elapsed)
 	}
 
 	return common.Marshal(openAIResp)
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }

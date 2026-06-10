@@ -129,7 +129,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	if promptRaw := service.BuildAuditPromptForRequest(request); promptRaw != "" {
 		common.SetContextKey(c, constant.ContextKeyAuditPromptRaw, promptRaw)
 	} else if originalMeta := request.GetTokenCountMeta(); originalMeta != nil && originalMeta.CombineText != "" {
-		common.SetContextKey(c, constant.ContextKeyAuditPromptRaw, originalMeta.CombineText)
+		if raw := service.BuildAuditPromptFromRawText(originalMeta.CombineText); raw != "" {
+			common.SetContextKey(c, constant.ContextKeyAuditPromptRaw, raw)
+		} else {
+			common.SetContextKey(c, constant.ContextKeyAuditPromptRaw, originalMeta.CombineText)
+		}
 	}
 	if filterResult := service.ApplyKeywordFilterOnRequest(request); filterResult.Changed {
 		common.SetContextKey(c, constant.ContextKeyAuditKeywordHits, filterResult.Hits)
@@ -144,7 +148,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	if promptFinal := service.BuildAuditPromptForRequest(request); promptFinal != "" {
 		common.SetContextKey(c, constant.ContextKeyAuditPromptFinal, promptFinal)
 	} else if meta != nil && meta.CombineText != "" {
-		common.SetContextKey(c, constant.ContextKeyAuditPromptFinal, meta.CombineText)
+		if finalText := service.BuildAuditPromptFromRawText(meta.CombineText); finalText != "" {
+			common.SetContextKey(c, constant.ContextKeyAuditPromptFinal, finalText)
+		} else {
+			common.SetContextKey(c, constant.ContextKeyAuditPromptFinal, meta.CombineText)
+		}
 	}
 
 	if needSensitiveCheck && meta != nil {
@@ -681,13 +689,18 @@ func RelayTask(c *gin.Context) {
 		task.Quota = result.Quota
 		task.Data = result.TaskData
 		task.Action = relayInfo.Action
-					if gjson.GetBytes(task.Data, "status").String() == dto.VideoStatusCompleted {
-						task.Status = model.TaskStatusSuccess
-						task.Progress = "100%"
-						if url := gjson.GetBytes(task.Data, "metadata.url").String(); url != "" {
-							task.PrivateData.ResultURL = url
-						}
-					}
+		if gjson.GetBytes(task.Data, "status").String() == dto.VideoStatusCompleted {
+			task.Status = model.TaskStatusSuccess
+			task.Progress = "100%"
+			if url := firstNonEmptyString(
+				gjson.GetBytes(task.Data, "url").String(),
+				gjson.GetBytes(task.Data, "download_url").String(),
+				gjson.GetBytes(task.Data, "metadata.url").String(),
+				gjson.GetBytes(task.Data, "metadata.download_url").String(),
+			); url != "" {
+				task.PrivateData.ResultURL = url
+			}
+		}
 		if insertErr := task.Insert(); insertErr != nil {
 			common.SysError("insert task error: " + insertErr.Error())
 		}
@@ -704,6 +717,15 @@ func respondTaskError(c *gin.Context, taskErr *dto.TaskError) {
 		taskErr.Message = "当前分组上游负载已饱和，请稍后再试"
 	}
 	c.JSON(taskErr.StatusCode, taskErr)
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func shouldRetryTaskRelay(c *gin.Context, channelId int, taskErr *dto.TaskError, retryIndex int) bool {

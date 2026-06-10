@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/samber/lo"
@@ -47,10 +48,26 @@ func GetAndValidateRequest(c *gin.Context, format types.RelayFormat) (request dt
 		request, err = GetAndValidAudioRequest(c, relayMode)
 	case types.RelayFormatOpenAIRealtime:
 		request = &dto.BaseRequest{}
+	case types.RelayFormatTask:
+		request, err = GetAndValidateTaskRequest(c)
 	default:
 		return nil, fmt.Errorf("unsupported relay format: %s", format)
 	}
 	return request, err
+}
+
+func GetAndValidateTaskRequest(c *gin.Context) (*relaycommon.TaskSubmitReq, error) {
+	request := &relaycommon.TaskSubmitReq{}
+	if err := common.UnmarshalBodyReusable(c, request); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(request.Model) == "" {
+		return nil, errors.New("model is required")
+	}
+	if strings.TrimSpace(request.Prompt) == "" {
+		return nil, errors.New("prompt is required")
+	}
+	return request, nil
 }
 
 func GetAndValidAudioRequest(c *gin.Context, relayMode int) (*dto.AudioRequest, error) {

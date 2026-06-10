@@ -39,7 +39,7 @@ type TaskSubmitResult struct {
 func ResolveOriginTask(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskError {
 	// 检测 remix action
 	path := c.Request.URL.Path
-	if strings.Contains(path, "/v1/videos/") && strings.HasSuffix(path, "/remix") {
+	if (strings.Contains(path, "/v1/videos/") || strings.Contains(path, "/pg/videos/")) && strings.HasSuffix(path, "/remix") {
 		info.Action = constant.TaskActionRemix
 	}
 
@@ -386,7 +386,7 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 		return
 	}
 
-	isOpenAIVideoAPI := strings.HasPrefix(c.Request.RequestURI, "/v1/videos/")
+	isOpenAIVideoAPI := strings.HasPrefix(c.Request.RequestURI, "/v1/videos/") || strings.HasPrefix(c.Request.RequestURI, "/pg/videos/")
 
 	// Gemini/Vertex 支持实时查询：用户 fetch 时直接从上游拉取最新状态
 	if realtimeResp := tryRealtimeFetch(originTask, isOpenAIVideoAPI); len(realtimeResp) > 0 {

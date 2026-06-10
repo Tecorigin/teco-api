@@ -246,8 +246,10 @@ export interface TaskLog {
   finish_time?: number // seconds
   progress?: string
   progress_message_en?: string
+  properties?: string
   data?: string // JSON string
   fail_reason?: string
+  result_url?: string
   status: string // NOT_START, SUBMITTED, IN_PROGRESS, SUCCESS, FAILURE, QUEUED, UNKNOWN
   other?: string
   created_at?: number

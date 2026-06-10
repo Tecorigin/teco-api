@@ -33,6 +33,17 @@ export interface QuotaDataItem {
   quota?: number
 }
 
+export interface ModelTokenStatsItem {
+  model_name: string
+  request_count: number
+  prompt_tokens: number
+  completion_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  cache_creation_tokens: number
+  total_tokens: number
+}
+
 // ============================================================================
 // Uptime Monitoring Types
 // ============================================================================

@@ -35,6 +35,7 @@ func SetApiRouter(router *gin.Engine) {
 		perfMetricsRoute.Use(middleware.TryUserAuth())
 		{
 			perfMetricsRoute.GET("/summary", controller.GetPerfMetricsSummary)
+			perfMetricsRoute.GET("/summary/prometheus", controller.GetPerfMetricsSummaryPrometheus)
 			perfMetricsRoute.GET("", controller.GetPerfMetrics)
 		}
 		apiRouter.GET("/rankings", controller.GetRankings)
@@ -317,6 +318,8 @@ func SetApiRouter(router *gin.Engine) {
 		dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
 		dataRoute.GET("/users", middleware.AdminAuth(), controller.GetQuotaDatesByUser)
 		dataRoute.GET("/self", middleware.UserAuth(), controller.GetUserQuotaDates)
+		dataRoute.GET("/model-token-stats", middleware.AdminAuth(), controller.GetModelTokenStats)
+		dataRoute.GET("/self/model-token-stats", middleware.UserAuth(), controller.GetSelfModelTokenStats)
 
 		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{

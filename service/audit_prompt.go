@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 )
 
@@ -89,21 +90,129 @@ func collectOpenAIResponsesTexts(req *dto.OpenAIResponsesRequest, userTexts, sys
 		appendIfNotEmpty(userTexts, jsonRawToString(req.Prompt))
 	}
 
-	for _, input := range req.ParseInput() {
-		switch input.Type {
-		case "input_text":
-			for _, text := range extractUserTextsFromInputText(input.Text) {
-				appendIfNotEmpty(userTexts, text)
+	if req.Input == nil {
+		return
+	}
+
+	if common.GetJsonType(req.Input) == "string" {
+		var text string
+		_ = common.Unmarshal(req.Input, &text)
+		for _, t := range extractUserTextsFromInputText(text) {
+			appendIfNotEmpty(userTexts, t)
+		}
+		for _, t := range extractSystemTextsFromInputText(text) {
+			appendIfNotEmpty(systemTexts, t)
+		}
+		return
+	}
+
+	if common.GetJsonType(req.Input) != "array" {
+		for _, input := range req.ParseInput() {
+			switch input.Type {
+			case "input_text":
+				for _, text := range extractUserTextsFromInputText(input.Text) {
+					appendIfNotEmpty(userTexts, text)
+				}
+				for _, text := range extractSystemTextsFromInputText(input.Text) {
+					appendIfNotEmpty(systemTexts, text)
+				}
+			case "input_file":
+				appendIfNotEmpty(otherTexts, input.FileUrl)
+			case "input_image":
+				appendIfNotEmpty(otherTexts, input.ImageUrl)
 			}
-			for _, text := range extractSystemTextsFromInputText(input.Text) {
-				appendIfNotEmpty(systemTexts, text)
+		}
+		return
+	}
+
+	var inputs []dto.Input
+	_ = common.Unmarshal(req.Input, &inputs)
+	for _, input := range inputs {
+		role := strings.ToLower(strings.TrimSpace(input.Role))
+		for _, media := range parseResponsesInputContent(input.Content) {
+			switch media.Type {
+			case "input_text":
+				if role == "system" || role == "developer" || role == "model" || role == "assistant" {
+					for _, t := range extractSystemTextsFromInputText(media.Text) {
+						appendIfNotEmpty(systemTexts, t)
+					}
+					if cleaned := stripNonUserWrappedSections(media.Text); cleaned != "" {
+						appendIfNotEmpty(systemTexts, cleaned)
+					}
+					continue
+				}
+				for _, t := range extractUserTextsFromInputText(media.Text) {
+					appendIfNotEmpty(userTexts, t)
+				}
+				for _, t := range extractSystemTextsFromInputText(media.Text) {
+					appendIfNotEmpty(systemTexts, t)
+				}
+			case "input_file":
+				appendIfNotEmpty(otherTexts, media.FileUrl)
+			case "input_image":
+				appendIfNotEmpty(otherTexts, media.ImageUrl)
 			}
-		case "input_file":
-			appendIfNotEmpty(otherTexts, input.FileUrl)
-		case "input_image":
-			appendIfNotEmpty(otherTexts, input.ImageUrl)
 		}
 	}
+}
+
+func parseResponsesInputContent(content json.RawMessage) []dto.MediaInput {
+	if len(content) == 0 {
+		return nil
+	}
+
+	result := make([]dto.MediaInput, 0)
+	contentType := common.GetJsonType(content)
+	if contentType == "string" {
+		var text string
+		_ = common.Unmarshal(content, &text)
+		appendMediaIfNotEmpty(&result, dto.MediaInput{Type: "input_text", Text: text})
+		return result
+	}
+	if contentType != "array" {
+		return nil
+	}
+
+	var array []any
+	_ = common.Unmarshal(content, &array)
+	for _, itemAny := range array {
+		item, ok := itemAny.(map[string]any)
+		if !ok {
+			continue
+		}
+		typeVal, ok := item["type"].(string)
+		if !ok {
+			continue
+		}
+		switch typeVal {
+		case "input_text":
+			text, _ := item["text"].(string)
+			appendMediaIfNotEmpty(&result, dto.MediaInput{Type: "input_text", Text: text})
+		case "input_image":
+			var imageUrl string
+			switch v := item["image_url"].(type) {
+			case string:
+				imageUrl = v
+			case map[string]any:
+				if url, ok := v["url"].(string); ok {
+					imageUrl = url
+				}
+			}
+			result = append(result, dto.MediaInput{Type: "input_image", ImageUrl: imageUrl})
+		case "input_file":
+			var fileUrl string
+			switch v := item["file_url"].(type) {
+			case string:
+				fileUrl = v
+			case map[string]any:
+				if url, ok := v["url"].(string); ok {
+					fileUrl = url
+				}
+			}
+			result = append(result, dto.MediaInput{Type: "input_file", FileUrl: fileUrl})
+		}
+	}
+	return result
 }
 
 func collectClaudeTexts(req *dto.ClaudeRequest, userTexts, systemTexts, otherTexts *[]string) {
@@ -231,6 +340,32 @@ var (
 	instructionsTagPattern       = regexp.MustCompile(`(?is)<instructions>(.*?)</instructions>`)
 )
 
+// BuildAuditPromptFromRawText preprocesses full raw context text into audit-friendly sections.
+// This is used before any truncation, especially for fallback paths using CombineText.
+func BuildAuditPromptFromRawText(text string) string {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return ""
+	}
+
+	userTexts := extractUserTextsFromInputText(trimmed)
+	systemTexts := extractSystemTextsFromInputText(trimmed)
+
+	parts := make([]string, 0, 2)
+	if len(userTexts) > 0 {
+		parts = append(parts, "user\n"+strings.Join(userTexts, "\n"))
+	}
+	if len(systemTexts) > 0 {
+		parts = append(parts, "system\n"+strings.Join(systemTexts, "\n"))
+	}
+	if len(parts) == 0 {
+		if cleaned := stripNonUserWrappedSections(trimmed); cleaned != "" {
+			parts = append(parts, cleaned)
+		}
+	}
+	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+}
+
 func extractUserTextsFromInputText(text string) []string {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
@@ -281,14 +416,14 @@ func extractTaggedTexts(text string, pattern *regexp.Regexp) []string {
 
 func stripNonUserWrappedSections(text string) string {
 	cleaned := text
-	patterns := []*regexp.Regexp{
+	closedPatterns := []*regexp.Regexp{
 		assistantResponseTagPattern,
 		environmentContextTagPattern,
 		systemReminderTagPattern,
 		toolInstructionsTagPattern,
 		instructionsTagPattern,
 	}
-	for _, pattern := range patterns {
+	for _, pattern := range closedPatterns {
 		cleaned = pattern.ReplaceAllString(cleaned, "")
 	}
 	cleaned = regexp.MustCompile(`(?is)</?[^>]+>`).ReplaceAllString(cleaned, "")
@@ -345,8 +480,15 @@ func jsonRawToString(raw json.RawMessage) string {
 		return ""
 	}
 	var str string
-	if err := json.Unmarshal(raw, &str); err == nil {
+	if err := common.Unmarshal(raw, &str); err == nil {
 		return strings.TrimSpace(str)
 	}
 	return strings.TrimSpace(string(raw))
+}
+
+func appendMediaIfNotEmpty(target *[]dto.MediaInput, value dto.MediaInput) {
+	if strings.TrimSpace(value.Text) == "" && strings.TrimSpace(value.FileUrl) == "" && strings.TrimSpace(value.ImageUrl) == "" {
+		return
+	}
+	*target = append(*target, value)
 }

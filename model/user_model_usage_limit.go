@@ -240,17 +240,6 @@ func getPeriodStart(ts time.Time, periodType string) time.Time {
 	}
 }
 
-func GetUserModelUsageStatsSince(userId int, modelName string, startAt int64) (*UserModelUsageStat, error) {
-	now := time.Unix(startAt, 0)
-	periodTypes := []string{"daily", "weekly", "monthly"}
-	for _, periodType := range periodTypes {
-		if getPeriodStart(now, periodType).Unix() == startAt {
-			return GetUserModelUsageCounter(userId, modelName, periodType, startAt)
-		}
-	}
-	return &UserModelUsageStat{}, nil
-}
-
 func CheckUserModelUsageLimit(userId int, modelName string, estimatedTokens int64, requestIncrement int64, requestId string) (*UserModelUsageExceededResult, error) {
 	modelName = normalizeModelName(modelName)
 	if userId <= 0 || modelName == "" {
@@ -281,7 +270,7 @@ func CheckUserModelUsageLimit(userId int, modelName string, estimatedTokens int6
 			continue
 		}
 		startAt := getPeriodStart(now, check.PeriodType).Unix()
-		stat, err := GetUserModelUsageStatsSince(userId, modelName, startAt)
+		stat, err := GetUserModelUsageCounter(userId, modelName, check.PeriodType, startAt)
 		if err != nil {
 			return nil, err
 		}

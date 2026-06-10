@@ -713,6 +713,20 @@ func (t *TaskSubmitReq) HasImage() bool {
 	return len(t.Images) > 0
 }
 
+func (t *TaskSubmitReq) GetTokenCountMeta() *types.TokenCountMeta {
+	return &types.TokenCountMeta{
+		TokenType: types.TokenTypeTokenizer,
+	}
+}
+
+func (t *TaskSubmitReq) IsStream(c *gin.Context) bool {
+	return false
+}
+
+func (t *TaskSubmitReq) SetModelName(modelName string) {
+	t.Model = modelName
+}
+
 func (t *TaskSubmitReq) UnmarshalJSON(data []byte) error {
 	type Alias TaskSubmitReq
 	aux := &struct {

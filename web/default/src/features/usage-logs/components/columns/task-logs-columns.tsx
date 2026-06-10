@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 /* eslint-disable react-refresh/only-export-components */
 import { useState, useMemo } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
-import { Music } from 'lucide-react'
+import { AlertCircle, Music, Play } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { formatTimestampToDate } from '@/lib/format'
@@ -27,6 +27,13 @@ import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { DataTableColumnHeader } from '@/components/data-table'
 import { StatusBadge } from '@/components/status-badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { TASK_ACTIONS, TASK_STATUS } from '../../constants'
 import { taskActionMapper, taskStatusMapper } from '../../lib/mappers'
 import type { TaskLog } from '../../types'
@@ -53,6 +60,64 @@ function parseTaskData(data: unknown): unknown[] {
     }
   }
   return []
+}
+
+function getVideoUrlFromValue(value: unknown): string {
+  if (!value || typeof value !== 'object') return ''
+  const record = value as Record<string, unknown>
+  const direct = [record.result_url, record.url, record.download_url].find(
+    (item) => typeof item === 'string' && item.trim()
+  )
+  if (typeof direct === 'string') return direct.trim()
+
+  const metadata = record.metadata
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+    const metaRecord = metadata as Record<string, unknown>
+    const metaUrl = [metaRecord.url, metaRecord.download_url].find(
+      (item) => typeof item === 'string' && item.trim()
+    )
+    if (typeof metaUrl === 'string') return metaUrl.trim()
+  }
+
+  return ''
+}
+
+function getTaskVideoUrl(log: TaskLog): string {
+  if (typeof log.result_url === 'string' && log.result_url.trim()) {
+    return log.result_url.trim()
+  }
+
+  const data = parseTaskData(log.data)
+  for (const item of data) {
+    const url = getVideoUrlFromValue(item)
+    if (url) return url
+  }
+
+  return getVideoUrlFromValue(log.data)
+}
+
+function parseTaskProperties(properties: unknown): Record<string, unknown> | null {
+  if (!properties) return null
+  if (typeof properties === 'object' && !Array.isArray(properties)) {
+    return properties as Record<string, unknown>
+  }
+  if (typeof properties === 'string') {
+    try {
+      const parsed = JSON.parse(properties)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>
+      }
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function getOriginModelName(log: TaskLog): string {
+  const properties = parseTaskProperties(log.properties)
+  const modelName = properties?.origin_model_name
+  return typeof modelName === 'string' ? modelName.trim() : ''
 }
 
 function AudioPreviewCell({ log }: { log: TaskLog }) {
@@ -85,6 +150,84 @@ function AudioPreviewCell({ log }: { log: TaskLog }) {
         onOpenChange={setOpen}
         clips={clips as AudioClip[]}
       />
+    </>
+  )
+}
+
+function ExpiredVideoPlaceholder({ label, description }: { label: string; description: string }) {
+  return (
+    <div className='text-muted-foreground flex min-h-[320px] flex-col items-center justify-center gap-3 bg-muted/30 px-6 text-center'>
+      <div className='flex h-12 w-12 items-center justify-center rounded-full bg-background/80 shadow-sm'>
+        <AlertCircle className='h-6 w-6 text-amber-500' />
+      </div>
+      <div className='space-y-1'>
+        <div className='text-foreground text-sm font-medium'>{label}</div>
+        <div className='text-xs'>{description}</div>
+      </div>
+    </div>
+  )
+}
+
+function VideoPreviewCell({ log }: { log: TaskLog }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const [isExpired, setIsExpired] = useState(false)
+  const videoUrl = getTaskVideoUrl(log)
+
+  if (!videoUrl) return null
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setIsExpired(false)
+    }
+    setOpen(nextOpen)
+  }
+
+  return (
+    <>
+      <button
+        type='button'
+        className='group flex items-center gap-1 text-left text-xs'
+        onClick={() => handleOpenChange(true)}
+      >
+        <Play className='text-muted-foreground size-3' />
+        <span className='text-foreground leading-snug group-hover:underline'>
+          {t('Click to preview video')}
+        </span>
+      </button>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className='w-[96vw] max-w-5xl'>
+          <DialogHeader>
+            <DialogTitle>{t('Video Preview')}</DialogTitle>
+            <DialogDescription>
+              {t('Task ID:')} {log.task_id}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-3'>
+            <p className='text-sm text-amber-600'>
+              {t('Generated videos use temporary links. If they expire, they will no longer be displayed, so please save them as soon as possible.')}
+            </p>
+            <div className='max-h-[80vh] overflow-auto rounded-md border bg-muted/10'>
+              {isExpired ? (
+                <ExpiredVideoPlaceholder
+                  label={t('Video expired')}
+                  description={t('This temporary video link has expired.')}
+                />
+              ) : (
+                <video
+                  src={videoUrl}
+                  className='mx-auto block max-h-[80vh] w-full object-contain'
+                  controls
+                  autoPlay
+                  playsInline
+                  onError={() => setIsExpired(true)}
+                />
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
@@ -194,6 +337,34 @@ export function useTaskLogsColumns(isAdmin: boolean): ColumnDef<TaskLog>[] {
       },
       meta: { label: t('Task ID'), mobileTitle: true },
     },
+    {
+      id: 'origin_model_name',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t('Model Name')} />
+      ),
+      accessorFn: (row) => getOriginModelName(row),
+      cell: ({ row }) => {
+        const log = row.original
+        const modelName = getOriginModelName(log)
+
+        if (!modelName) {
+          return <span className='text-muted-foreground/60 text-xs'>-</span>
+        }
+
+        return (
+          <div className='flex max-w-[220px] flex-col gap-0.5'>
+            <StatusBadge
+              label={modelName}
+              copyText={modelName}
+              size='sm'
+              showDot={false}
+              className='border-border/60 bg-muted/30 text-foreground max-w-full truncate rounded-md border px-1.5 py-0.5'
+            />
+          </div>
+        )
+      },
+      meta: { label: t('Model Name') },
+    },
     createDurationColumn<TaskLog>({
       submitTimeKey: 'submit_time',
       finishTimeKey: 'finish_time',
@@ -255,20 +426,9 @@ export function useTaskLogsColumns(isAdmin: boolean): ColumnDef<TaskLog>[] {
           log.action === TASK_ACTIONS.REFERENCE_GENERATE ||
           log.action === TASK_ACTIONS.REMIX_GENERATE
         const isSuccess = status === TASK_STATUS.SUCCESS
-        const isUrl = failReason?.startsWith('http')
 
-        if (isSuccess && isVideoTask && isUrl) {
-          const videoUrl = `/v1/videos/${log.task_id}/content`
-          return (
-            <a
-              href={videoUrl}
-              target='_blank'
-              rel='noopener noreferrer'
-              className='text-foreground text-xs hover:underline'
-            >
-              {t('Click to preview video')}
-            </a>
-          )
+        if (isSuccess && isVideoTask && getTaskVideoUrl(log)) {
+          return <VideoPreviewCell log={log} />
         }
 
         if (!failReason) {
