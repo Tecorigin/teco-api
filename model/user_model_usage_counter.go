@@ -82,19 +82,19 @@ func BackfillUserModelUsageCountersFromLogs() error {
 		var periodExpr string
 		switch periodType {
 		case "daily":
-			if common.UsingMySQL {
+			if common.UsingMainDatabase(common.DatabaseTypeMySQL) {
 				periodExpr = "UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(created_at)))"
 			} else {
 				periodExpr = "strftime('%s', date(created_at, 'unixepoch'))"
 			}
 		case "weekly":
-			if common.UsingMySQL {
+			if common.UsingMainDatabase(common.DatabaseTypeMySQL) {
 				periodExpr = "UNIX_TIMESTAMP(DATE_SUB(DATE(FROM_UNIXTIME(created_at)), INTERVAL WEEKDAY(FROM_UNIXTIME(created_at)) DAY))"
 			} else {
 				periodExpr = "strftime('%s', date(created_at, 'unixepoch', '-' || ((strftime('%w', created_at, 'unixepoch') + 6) % 7) || ' days'))"
 			}
 		default:
-			if common.UsingMySQL {
+			if common.UsingMainDatabase(common.DatabaseTypeMySQL) {
 				periodExpr = "UNIX_TIMESTAMP(DATE_FORMAT(FROM_UNIXTIME(created_at), '%Y-%m-01'))"
 			} else {
 				periodExpr = "strftime('%s', strftime('%Y-%m-01', created_at, 'unixepoch'))"
