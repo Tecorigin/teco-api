@@ -74,20 +74,27 @@ func Record(sample Sample) {
 	actual, _ := hotBuckets.LoadOrStore(key, &atomicBucket{})
 	actual.(*atomicBucket).add(sample)
 	recordRedis(key, sample)
+	recordSample(sample, key.bucketTs)
 }
 
 func Query(params QueryParams) (QueryResult, error) {
-	if params.Hours <= 0 {
-		params.Hours = 24
+	if params.StartTs > 0 && params.EndTs > params.StartTs {
+		if params.EndTs <= params.StartTs {
+			return QueryResult{}, nil
+		}
+	} else {
+		if params.Hours <= 0 {
+			params.Hours = 24
+		}
+		if params.Hours > 24*30 {
+			params.Hours = 24 * 30
+		}
+		params.EndTs = time.Now().Unix()
+		params.StartTs = params.EndTs - int64(params.Hours)*3600
 	}
-	if params.Hours > 24*30 {
-		params.Hours = 24 * 30
-	}
-	endTs := time.Now().Unix()
-	startTs := endTs - int64(params.Hours)*3600
 
 	merged := map[bucketKey]counters{}
-	rows, err := model.GetPerfMetrics(params.Model, params.Group, startTs, endTs)
+	rows, err := model.GetPerfMetrics(params.Model, params.Group, params.StartTs, params.EndTs)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -109,7 +116,7 @@ func Query(params QueryParams) (QueryResult, error) {
 
 	hotBuckets.Range(func(key, value any) bool {
 		k := key.(bucketKey)
-		if k.model != params.Model || k.bucketTs < startTs || k.bucketTs > endTs {
+		if k.model != params.Model || k.bucketTs < params.StartTs || k.bucketTs > params.EndTs {
 			return true
 		}
 		if params.Group != "" && k.group != params.Group {
@@ -123,14 +130,20 @@ func Query(params QueryParams) (QueryResult, error) {
 }
 
 func QuerySummaryAll(hours int, groups []string) (SummaryAllResult, error) {
-	if hours <= 0 {
-		hours = 24
+	return QuerySummaryAllWithRange(0, 0, hours, groups)
+}
+
+func QuerySummaryAllWithRange(startTs int64, endTs int64, hours int, groups []string) (SummaryAllResult, error) {
+	if startTs <= 0 || endTs <= 0 || startTs >= endTs {
+		if hours <= 0 {
+			hours = 24
+		}
+		if hours > 24*30 {
+			hours = 24 * 30
+		}
+		endTs = time.Now().Unix()
+		startTs = endTs - int64(hours)*3600
 	}
-	if hours > 24*30 {
-		hours = 24 * 30
-	}
-	endTs := time.Now().Unix()
-	startTs := endTs - int64(hours)*3600
 	allowedGroups := allowedGroupSet(groups)
 
 	rows, err := model.GetPerfMetricsSummaryBucketsAll(startTs, endTs, groups)
@@ -425,4 +438,23 @@ func mergeRedisActiveBuckets(merged map[bucketKey]counters, params QueryParams, 
 
 func redisBucketKey(key bucketKey) string {
 	return fmt.Sprintf("perf:%s:%s:%d", key.model, key.group, key.bucketTs)
+}
+
+func recordSample(sample Sample, bucketTs int64) {
+	tpotMs := int64(0)
+	if sample.OutputTokens > 0 && sample.GenerationMs > 0 {
+		tpotMs = sample.GenerationMs / sample.OutputTokens
+	}
+	if err := model.CreatePerfMetricSample(&model.PerfMetricSample{
+		ModelName:    sample.Model,
+		Group:        sample.Group,
+		BucketTs:     bucketTs,
+		LatencyMs:    sample.LatencyMs,
+		TpotMs:       tpotMs,
+		OutputTokens: sample.OutputTokens,
+		Success:      sample.Success,
+		CreatedAt:    time.Now().Unix(),
+	}); err != nil {
+		common.SysError(fmt.Sprintf("failed to record perf metric sample model=%s group=%s: %s", sample.Model, sample.Group, err.Error()))
+	}
 }

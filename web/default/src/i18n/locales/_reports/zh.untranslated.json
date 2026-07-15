@@ -1,0 +1,12 @@
+{
+  "Forward client X-Request-Id to upstream": "透传客户端 X-Request-Id 到上游",
+  "Forward upstream X-Request-Id to client": "透传上游 X-Request-Id 给前端",
+  "guidance_scale": "guidance_scale",
+  "guidance_scale_2": "guidance_scale_2",
+  "Model Token Breakdown": "模型 Token 明细",
+  "Return the upstream X-Request-Id header back to the client response when available": "当上游响应中带有 X-Request-Id 时，将其回传到前端响应头",
+  "SLO ≤ {{ms}} ms": "SLO ≤ {{ms}} ms",
+  "Use the client-provided X-Request-Id and pass it to upstream providers": "使用客户端传入的 X-Request-Id，并透传给上游提供商",
+  "View and manage your API usage logs": "查看和管理您的 API 使用日志",
+  "View detailed input, output, and cache token usage by model": "查看各模型输入、输出及缓存 Token 使用明细"
+}

@@ -110,6 +110,8 @@ func main() {
 
 	// 数据看板
 	go model.UpdateQuotaData()
+	// 异步回填 quota_data 的 token 字段（避免阻塞启动）
+	model.StartQuotaDataBackfillAsync()
 
 	if os.Getenv("CHANNEL_UPDATE_FREQUENCY") != "" {
 		frequency, err := strconv.Atoi(os.Getenv("CHANNEL_UPDATE_FREQUENCY"))

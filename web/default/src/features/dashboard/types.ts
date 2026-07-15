@@ -44,6 +44,10 @@ export interface ModelTokenStatsItem {
   total_tokens: number
 }
 
+export interface UserModelTokenStatsItem extends ModelTokenStatsItem {
+  username: string
+}
+
 export interface FlowQuotaDataItem {
   user_id?: number
   username?: string
@@ -219,6 +223,10 @@ export interface UserChartsFilters {
   timeGranularity: TimeGranularity
   selectedRange: number
   topUserLimit: number
+  metric: 'quota' | 'tokens'
+  startDate?: Date
+  endDate?: Date
+  username?: string
 }
 
 // ============================================================================

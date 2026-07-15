@@ -1,6 +1,9 @@
 package model
 
 import (
+	"math"
+	"sort"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -127,4 +130,148 @@ func PerfMetricStartTime(hours int) int64 {
 		hours = 24
 	}
 	return time.Now().Add(-time.Duration(hours) * time.Hour).Unix()
+}
+
+// PerfMetricSample stores per-request samples for percentile and SLO analytics.
+type PerfMetricSample struct {
+	Id               int64  `json:"id" gorm:"primaryKey"`
+	ModelName        string `json:"model_name" gorm:"size:128;index:idx_perf_sample_model_bucket,priority:1;index:idx_perf_sample_bucket"`
+	Group            string `json:"group" gorm:"column:group;size:64;index:idx_perf_sample_model_bucket,priority:2"`
+	BucketTs         int64  `json:"bucket_ts" gorm:"index:idx_perf_sample_model_bucket,priority:3;index:idx_perf_sample_bucket"`
+	LatencyMs        int64  `json:"latency_ms" gorm:"default:0"`
+	TpotMs           int64  `json:"tpot_ms" gorm:"default:0"`
+	OutputTokens     int64  `json:"output_tokens" gorm:"default:0"`
+	Success          bool   `json:"success"`
+	CreatedAt        int64  `json:"created_at" gorm:"index:idx_perf_sample_created_at"`
+}
+
+func (PerfMetricSample) TableName() string {
+	return "perf_metric_samples"
+}
+
+func CreatePerfMetricSample(sample *PerfMetricSample) error {
+	if sample == nil || sample.ModelName == "" {
+		return nil
+	}
+	return DB.Create(sample).Error
+}
+
+func DeletePerfMetricSamplesBefore(cutoffTs int64) error {
+	if cutoffTs <= 0 {
+		return nil
+	}
+	return DB.Where("created_at < ?", cutoffTs).Delete(&PerfMetricSample{}).Error
+}
+
+type ModelSLOStatsRow struct {
+	ModelName      string  `json:"model_name"`
+	RequestCount   int64   `json:"request_count"`
+	SuccessCount   int64   `json:"success_count"`
+	Rpm            float64 `json:"rpm"`
+	Tpm            float64 `json:"tpm"`
+	P99LatencyMs   int64   `json:"p99_latency_ms"`
+	P99TpotMs      int64   `json:"p99_tpot_ms"`
+	Slo            float64 `json:"slo"`
+}
+
+func GetModelSLOStats(startTs int64, endTs int64, modelName string, groups []string, sloThresholdMs int64) ([]ModelSLOStatsRow, error) {
+	var samples []PerfMetricSample
+	query := DB.Model(&PerfMetricSample{}).
+		Where("created_at >= ? AND created_at <= ?", startTs, endTs)
+	if modelName != "" {
+		query = query.Where("model_name LIKE ? ESCAPE '!'", "%"+escapeLikeValue(modelName)+"%")
+	}
+	if groups != nil {
+		if len(groups) == 0 {
+			return nil, nil
+		}
+		query = query.Where(commonGroupCol+" IN ?", groups)
+	}
+	if err := query.Order("model_name ASC, created_at ASC").Find(&samples).Error; err != nil {
+		return nil, err
+	}
+
+	if len(samples) == 0 {
+		return []ModelSLOStatsRow{}, nil
+	}
+
+	type agg struct {
+		requestCount int64
+		successCount int64
+		outputTokens int64
+		latencies    []int64
+		tpots        []int64
+		sloHits      int64
+	}
+
+	byModel := make(map[string]*agg)
+	for _, sample := range samples {
+		current := byModel[sample.ModelName]
+		if current == nil {
+			current = &agg{}
+			byModel[sample.ModelName] = current
+		}
+		current.requestCount++
+		if sample.Success {
+			current.successCount++
+		}
+		current.outputTokens += sample.OutputTokens
+		current.latencies = append(current.latencies, sample.LatencyMs)
+		current.tpots = append(current.tpots, sample.TpotMs)
+		if sample.Success && sample.LatencyMs > 0 && sample.LatencyMs <= sloThresholdMs {
+			current.sloHits++
+		}
+	}
+
+	windowMinutes := math.Max(float64(endTs-startTs)/60.0, 1)
+	rows := make([]ModelSLOStatsRow, 0, len(byModel))
+	for name, current := range byModel {
+		rows = append(rows, ModelSLOStatsRow{
+			ModelName:    name,
+			RequestCount: current.requestCount,
+			SuccessCount: current.successCount,
+			Rpm:          float64(current.requestCount) / windowMinutes,
+			Tpm:          float64(current.outputTokens) / windowMinutes,
+			P99LatencyMs: percentileInt64(current.latencies, 0.99),
+			P99TpotMs:    percentileInt64(current.tpots, 0.99),
+			Slo:          percent(current.sloHits, current.requestCount),
+		})
+	}
+
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].RequestCount > rows[j].RequestCount
+	})
+	return rows, nil
+}
+
+func percentileInt64(values []int64, p float64) int64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sorted := append([]int64(nil), values...)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i] < sorted[j]
+	})
+	idx := int(math.Ceil(float64(len(sorted))*p)) - 1
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(sorted) {
+		idx = len(sorted) - 1
+	}
+	return sorted[idx]
+}
+
+func percent(hit int64, total int64) float64 {
+	if total <= 0 {
+		return 0
+	}
+	return math.Round((float64(hit)/float64(total))*10000) / 100
+}
+
+func escapeLikeValue(value string) string {
+	value = strings.ReplaceAll(value, "!", "!!")
+	value = strings.ReplaceAll(value, "%", "!%")
+	value = strings.ReplaceAll(value, "_", "!_")
+	return value
 }

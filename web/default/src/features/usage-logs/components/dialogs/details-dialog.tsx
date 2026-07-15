@@ -789,6 +789,18 @@ export function DetailsDialog(props: DetailsDialogProps) {
           </DetailSection>
         )}
 
+        {other?.audit_prompt && (
+          <DetailSection label={t('Prompt Content')}>
+            <DetailTextBlock text={other.audit_prompt} />
+          </DetailSection>
+        )}
+
+        {other?.audit_reply && (
+          <DetailSection label={t('Reply Content')}>
+            <DetailTextBlock text={other.audit_reply} />
+          </DetailSection>
+        )}
+
         {/* Violation fee info */}
         {isViolation && other && (
           <DetailSection

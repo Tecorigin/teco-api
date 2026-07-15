@@ -705,13 +705,19 @@ export function processUserChartData(
   data: QuotaDataItem[],
   timeGranularity: TimeGranularity = 'day',
   t?: TFunction,
-  limit = 10
+  limit = 10,
+  metric: 'quota' | 'tokens' = 'quota'
 ): ProcessedUserChartData {
   const tt: TFunction = t ?? ((x) => x)
   const { config } = getCurrencyDisplay()
   const quotaPerUnit = config.quotaPerUnit
 
-  const formatVal = (raw: number) => renderQuotaCompat(raw, 2)
+  const formatVal = (raw: number) =>
+    metric === 'tokens'
+      ? Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(raw)
+      : renderQuotaCompat(raw, 2)
+  const metricValue = (item: QuotaDataItem) =>
+    metric === 'tokens' ? (Number(item.token_used) || 0) : (Number(item.quota) || 0)
 
   const emptyResult: ProcessedUserChartData = {
     spec_user_rank: {
@@ -754,7 +760,7 @@ export function processUserChartData(
   data.forEach((item) => {
     const username = item.username || 'unknown'
     const prev = userQuotaTotal.get(username) || 0
-    userQuotaTotal.set(username, prev + (Number(item.quota) || 0))
+    userQuotaTotal.set(username, prev + metricValue(item))
   })
 
   const sorted = Array.from(userQuotaTotal.entries()).sort(
@@ -789,7 +795,7 @@ export function processUserChartData(
     if (!topUserSet.has(user)) return
     if (!timeUserMap.has(timeKey)) timeUserMap.set(timeKey, new Map())
     const map = timeUserMap.get(timeKey)!
-    map.set(user, (map.get(user) || 0) + (Number(item.quota) || 0))
+    map.set(user, (map.get(user) || 0) + metricValue(item))
   })
 
   const sortedTimePoints = Array.from(allTimePoints).sort()

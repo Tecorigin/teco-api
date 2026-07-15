@@ -19,7 +19,19 @@ func GetModelTokenStats(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	 c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": stats})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": stats})
+}
+
+func GetUserModelTokenStats(c *gin.Context) {
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	username := c.Query("username")
+	stats, err := model.GetUserModelTokenStats(startTimestamp, endTimestamp, username)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": stats})
 }
 
 func GetSelfModelTokenStats(c *gin.Context) {

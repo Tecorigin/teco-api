@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -261,6 +262,9 @@ func InitLogDB() (err error) {
 }
 
 func migrateDB() error {
+	if err := ensureQuotaDataTokenColumns(); err != nil {
+		return err
+	}
 	// Migrate price_amount column from float/double to decimal for existing tables
 	migrateSubscriptionPlanPriceAmount()
 	// Migrate model_limits column from varchar to text for existing tables
@@ -294,6 +298,7 @@ func migrateDB() error {
 		&CustomOAuthProvider{},
 		&UserOAuthBinding{},
 		&PerfMetric{},
+		&PerfMetricSample{},
 		&UserModelUsageLimit{},
 		&UserModelUsageLimitHit{},
 		&UserModelUsageCounter{},
@@ -315,6 +320,8 @@ func migrateDB() error {
 			return err
 		}
 	}
+	// Backfill runs asynchronously after startup to avoid blocking service startup.
+	// See StartQuotaDataBackfillAsync for the background implementation.
 	return nil
 }
 
@@ -351,6 +358,7 @@ func migrateDBFast() error {
 		{&CustomOAuthProvider{}, "CustomOAuthProvider"},
 		{&UserOAuthBinding{}, "UserOAuthBinding"},
 		{&PerfMetric{}, "PerfMetric"},
+		{&PerfMetricSample{}, "PerfMetricSample"},
 		{&UserModelUsageLimit{}, "UserModelUsageLimit"},
 		{&UserModelUsageLimitHit{}, "UserModelUsageLimitHit"},
 		{&UserModelUsageCounter{}, "UserModelUsageCounter"},
@@ -694,6 +702,343 @@ func closeDB(db *gorm.DB) error {
 	}
 	err = sqlDB.Close()
 	return err
+}
+
+func ensureQuotaDataTokenColumns() error {
+	columns := []sqliteColumnDef{
+		{Name: "prompt_tokens", DDL: "integer NOT NULL DEFAULT 0"},
+		{Name: "completion_tokens", DDL: "integer NOT NULL DEFAULT 0"},
+		{Name: "cache_read_tokens", DDL: "integer NOT NULL DEFAULT 0"},
+		{Name: "cache_write_tokens", DDL: "integer NOT NULL DEFAULT 0"},
+		{Name: "cache_creation_tokens", DDL: "integer NOT NULL DEFAULT 0"},
+	}
+	tableName := "quota_data"
+	if !DB.Migrator().HasTable(tableName) {
+		return nil
+	}
+	for _, column := range columns {
+		if DB.Migrator().HasColumn(&QuotaData{}, column.Name) {
+			continue
+		}
+		alterSQL := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", tableName, column.Name, column.DDL)
+		if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
+			alterSQL = fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s bigint NOT NULL DEFAULT 0", tableName, column.Name)
+		} else if common.UsingMainDatabase(common.DatabaseTypeMySQL) {
+			alterSQL = fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s bigint NOT NULL DEFAULT 0", tableName, column.Name)
+		}
+		if err := DB.Exec(alterSQL).Error; err != nil {
+			return fmt.Errorf("failed to add %s.%s: %w", tableName, column.Name, err)
+		}
+	}
+	return nil
+}
+
+type quotaDataBackfillAggregate struct {
+	UserID              int
+	Username            string
+	ModelName           string
+	CreatedAt           int64
+	UseGroup            string
+	TokenID             int
+	ChannelID           int
+	NodeName            string
+	Count               int
+	Quota               int
+	TokenUsed           int
+	PromptTokens        int
+	CompletionTokens    int
+	CacheReadTokens     int
+	CacheWriteTokens    int
+	CacheCreationTokens int
+}
+
+func backfillQuotaDataTokenColumns() error {
+	if !DB.Migrator().HasTable("quota_data") || !LOG_DB.Migrator().HasTable("logs") {
+		return nil
+	}
+	var existingCount int64
+	if err := DB.Table("quota_data").
+		Where("prompt_tokens <> 0 OR completion_tokens <> 0 OR cache_read_tokens <> 0 OR cache_write_tokens <> 0 OR cache_creation_tokens <> 0").
+		Count(&existingCount).Error; err != nil {
+		return err
+	}
+	if existingCount > 0 {
+		return nil
+	}
+
+	var logs []*Log
+	if err := LOG_DB.Select("user_id, username, model_name, created_at, quota, prompt_tokens, completion_tokens, channel_id, token_id, "+logGroupCol+" as `group`, other").
+		Where("type = ? AND username <> '' AND model_name <> ''", LogTypeConsume).
+		Find(&logs).Error; err != nil {
+		return err
+	}
+	if len(logs) == 0 {
+		return nil
+	}
+	aggregates := make(map[string]*quotaDataBackfillAggregate, len(logs))
+	for _, item := range logs {
+		if item == nil || item.Username == "" || item.ModelName == "" {
+			continue
+		}
+		createdAt := item.CreatedAt - (item.CreatedAt % 3600)
+		nodeName := ""
+		cacheReadTokens := 0
+		cacheWriteTokens := 0
+		cacheCreationTokens := 0
+		if item.Other != "" {
+			var other map[string]interface{}
+			if err := common.UnmarshalJsonStr(item.Other, &other); err == nil {
+				cacheReadTokens = getMapIntValue(other, "cache_tokens")
+				cacheWriteTokens = getMapIntValue(other, "cache_write_tokens")
+				cacheCreationTokens = getMapIntValue(other, "cache_creation_tokens")
+				if value, ok := other["node_name"].(string); ok {
+					nodeName = value
+				}
+			}
+		}
+		key := fmt.Sprintf("%d\x00%s\x00%s\x00%d\x00%s\x00%d\x00%d\x00%s",
+			item.UserId,
+			item.Username,
+			item.ModelName,
+			createdAt,
+			item.Group,
+			item.TokenId,
+			item.ChannelId,
+			nodeName,
+		)
+		aggregate := aggregates[key]
+		if aggregate == nil {
+			aggregate = &quotaDataBackfillAggregate{
+				UserID:    item.UserId,
+				Username:  item.Username,
+				ModelName: item.ModelName,
+				CreatedAt: createdAt,
+				UseGroup:  item.Group,
+				TokenID:   item.TokenId,
+				ChannelID: item.ChannelId,
+				NodeName:  nodeName,
+			}
+			aggregates[key] = aggregate
+		}
+		aggregate.Count++
+		aggregate.Quota += item.Quota
+		aggregate.PromptTokens += item.PromptTokens
+		aggregate.CompletionTokens += item.CompletionTokens
+		aggregate.TokenUsed += item.PromptTokens + item.CompletionTokens
+		aggregate.CacheReadTokens += cacheReadTokens
+		aggregate.CacheWriteTokens += cacheWriteTokens
+		aggregate.CacheCreationTokens += cacheCreationTokens
+	}
+	for _, aggregate := range aggregates {
+		updates := map[string]interface{}{
+			"count":                 aggregate.Count,
+			"quota":                 aggregate.Quota,
+			"token_used":            aggregate.TokenUsed,
+			"prompt_tokens":         aggregate.PromptTokens,
+			"completion_tokens":     aggregate.CompletionTokens,
+			"cache_read_tokens":     aggregate.CacheReadTokens,
+			"cache_write_tokens":    aggregate.CacheWriteTokens,
+			"cache_creation_tokens": aggregate.CacheCreationTokens,
+		}
+		result := DB.Table("quota_data").Where(
+			"user_id = ? and username = ? and model_name = ? and created_at = ? and use_group = ? and token_id = ? and channel_id = ? and node_name = ?",
+			aggregate.UserID, aggregate.Username, aggregate.ModelName, aggregate.CreatedAt, aggregate.UseGroup, aggregate.TokenID, aggregate.ChannelID, aggregate.NodeName,
+		).Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			quotaData := &QuotaData{
+				UserID:              aggregate.UserID,
+				Username:            aggregate.Username,
+				ModelName:           aggregate.ModelName,
+				CreatedAt:           aggregate.CreatedAt,
+				UseGroup:            aggregate.UseGroup,
+				TokenID:             aggregate.TokenID,
+				ChannelID:           aggregate.ChannelID,
+				NodeName:            aggregate.NodeName,
+				Count:               aggregate.Count,
+				Quota:               aggregate.Quota,
+				TokenUsed:           aggregate.TokenUsed,
+				PromptTokens:        aggregate.PromptTokens,
+				CompletionTokens:    aggregate.CompletionTokens,
+				CacheReadTokens:     aggregate.CacheReadTokens,
+				CacheWriteTokens:    aggregate.CacheWriteTokens,
+				CacheCreationTokens: aggregate.CacheCreationTokens,
+			}
+			if err := DB.Table("quota_data").Create(quotaData).Error; err != nil {
+				return err
+			}
+		}
+	}
+	common.SysLog(fmt.Sprintf("backfilled quota_data token columns for %d aggregated rows", len(aggregates)))
+	return nil
+}
+
+// backfillQuotaDataTokenColumnsBatched processes logs in batches (by id) and
+// aggregates them into quota_data. It is safe to run multiple times; existing
+// quota_data rows will be overwritten with aggregates computed from logs.
+func backfillQuotaDataTokenColumnsBatched(batchSize int, pauseMS int) error {
+	if !DB.Migrator().HasTable("quota_data") || !LOG_DB.Migrator().HasTable("logs") {
+		return nil
+	}
+	// Read last processed id from Option table to allow resume after interruption.
+	lastID := 0
+	var opt Option
+	if err := DB.First(&opt, "key = ?", "quota_data_backfill_last_id").Error; err == nil {
+		if v := opt.Value; v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				lastID = n
+			}
+		}
+	}
+	totalAggregated := 0
+	for {
+		var logs []*Log
+		tx := LOG_DB.Select("id, user_id, username, model_name, created_at, quota, prompt_tokens, completion_tokens, channel_id, token_id, "+logGroupCol+" as `group`, other").
+			Where("type = ? AND username <> '' AND model_name <> '' AND id > ?", LogTypeConsume, lastID).
+			Order("id asc").Limit(batchSize)
+		if err := tx.Find(&logs).Error; err != nil {
+			return err
+		}
+		if len(logs) == 0 {
+			break
+		}
+		aggregates := make(map[string]*quotaDataBackfillAggregate, len(logs))
+		for _, item := range logs {
+			if item == nil || item.Username == "" || item.ModelName == "" {
+				if item != nil && item.Id > lastID {
+					lastID = item.Id
+				}
+				continue
+			}
+			createdAt := item.CreatedAt - (item.CreatedAt % 3600)
+			nodeName := ""
+			cacheReadTokens := 0
+			cacheWriteTokens := 0
+			cacheCreationTokens := 0
+			if item.Other != "" {
+				var other map[string]interface{}
+				if err := common.UnmarshalJsonStr(item.Other, &other); err == nil {
+					cacheReadTokens = getMapIntValue(other, "cache_tokens")
+					cacheWriteTokens = getMapIntValue(other, "cache_write_tokens")
+					cacheCreationTokens = getMapIntValue(other, "cache_creation_tokens")
+					if value, ok := other["node_name"].(string); ok {
+						nodeName = value
+					}
+				}
+			}
+			key := fmt.Sprintf("%d\x00%s\x00%s\x00%d\x00%s\x00%d\x00%d\x00%s",
+				item.UserId,
+				item.Username,
+				item.ModelName,
+				createdAt,
+				item.Group,
+				item.TokenId,
+				item.ChannelId,
+				nodeName,
+			)
+			aggregate := aggregates[key]
+			if aggregate == nil {
+				aggregate = &quotaDataBackfillAggregate{
+					UserID:    item.UserId,
+					Username:  item.Username,
+					ModelName: item.ModelName,
+					CreatedAt: createdAt,
+					UseGroup:  item.Group,
+					TokenID:   item.TokenId,
+					ChannelID: item.ChannelId,
+					NodeName:  nodeName,
+				}
+				aggregates[key] = aggregate
+			}
+			aggregate.Count++
+			aggregate.Quota += item.Quota
+			aggregate.PromptTokens += item.PromptTokens
+			aggregate.CompletionTokens += item.CompletionTokens
+			aggregate.TokenUsed += item.PromptTokens + item.CompletionTokens
+			aggregate.CacheReadTokens += cacheReadTokens
+			aggregate.CacheWriteTokens += cacheWriteTokens
+			aggregate.CacheCreationTokens += cacheCreationTokens
+			if item.Id > lastID {
+				lastID = item.Id
+			}
+		}
+		// Apply aggregates
+		for _, aggregate := range aggregates {
+			updates := map[string]interface{}{
+				"count":                 aggregate.Count,
+				"quota":                 aggregate.Quota,
+				"token_used":            aggregate.TokenUsed,
+				"prompt_tokens":         aggregate.PromptTokens,
+				"completion_tokens":     aggregate.CompletionTokens,
+				"cache_read_tokens":     aggregate.CacheReadTokens,
+				"cache_write_tokens":    aggregate.CacheWriteTokens,
+				"cache_creation_tokens": aggregate.CacheCreationTokens,
+			}
+			result := DB.Table("quota_data").Where(
+				"user_id = ? and username = ? and model_name = ? and created_at = ? and use_group = ? and token_id = ? and channel_id = ? and node_name = ?",
+				aggregate.UserID, aggregate.Username, aggregate.ModelName, aggregate.CreatedAt, aggregate.UseGroup, aggregate.TokenID, aggregate.ChannelID, aggregate.NodeName,
+			).Updates(updates)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				quotaData := &QuotaData{
+					UserID:              aggregate.UserID,
+					Username:            aggregate.Username,
+					ModelName:           aggregate.ModelName,
+					CreatedAt:           aggregate.CreatedAt,
+					UseGroup:            aggregate.UseGroup,
+					TokenID:             aggregate.TokenID,
+					ChannelID:           aggregate.ChannelID,
+					NodeName:            aggregate.NodeName,
+					Count:               aggregate.Count,
+					Quota:               aggregate.Quota,
+					TokenUsed:           aggregate.TokenUsed,
+					PromptTokens:        aggregate.PromptTokens,
+					CompletionTokens:    aggregate.CompletionTokens,
+					CacheReadTokens:     aggregate.CacheReadTokens,
+					CacheWriteTokens:    aggregate.CacheWriteTokens,
+					CacheCreationTokens: aggregate.CacheCreationTokens,
+				}
+				if err := DB.Table("quota_data").Create(quotaData).Error; err != nil {
+					return err
+				}
+			}
+			totalAggregated++
+		}
+		// persist progress after each batch so we can resume on restart
+		if lastID > 0 {
+			_ = UpdateOption("quota_data_backfill_last_id", strconv.Itoa(lastID))
+		}
+		// brief pause to avoid hammering DB
+		if pauseMS > 0 {
+			time.Sleep(time.Duration(pauseMS) * time.Millisecond)
+		}
+	}
+	// final persist
+	if lastID > 0 {
+		_ = UpdateOption("quota_data_backfill_last_id", strconv.Itoa(lastID))
+	}
+	common.SysLog(fmt.Sprintf("backfilled quota_data token columns for %d aggregated rows (batched)", totalAggregated))
+	return nil
+}
+
+// StartQuotaDataBackfillAsync launches the backfill in background on master nodes.
+func StartQuotaDataBackfillAsync() {
+	if !common.IsMasterNode {
+		return
+	}
+	go func() {
+		common.SysLog("starting async quota_data backfill (batched)")
+		// Use moderate batch size and small pause to limit DB impact
+		if err := backfillQuotaDataTokenColumnsBatched(1000, 200); err != nil {
+			common.SysLog("quota_data backfill failed: " + err.Error())
+		} else {
+			common.SysLog("quota_data backfill completed")
+		}
+	}()
 }
 
 func CloseDB() error {

@@ -23,9 +23,14 @@ import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useTheme } from '@/context/theme-provider'
-import { getUserQuotaDataByUsers } from '@/features/dashboard/api'
+import {
+  getUserModelTokenStats,
+  getUserQuotaDataByUsers,
+} from '@/features/dashboard/api'
+import { CompactDateTimeRangePicker } from '@/features/usage-logs/components/compact-date-time-range-picker'
 import {
   TIME_GRANULARITY_OPTIONS,
   TIME_RANGE_PRESETS,
@@ -41,6 +46,8 @@ import type {
 } from '@/features/dashboard/types'
 import { getRollingDateRange, type TimeGranularity } from '@/lib/time'
 import { VCHART_OPTION } from '@/lib/vchart'
+
+import { UserModelTokenTable } from './user-model-token-table'
 
 let themeManagerPromise: Promise<
   (typeof import('@visactor/vchart'))['ThemeManager']
@@ -83,19 +90,31 @@ export function UserCharts(props: UserChartsProps) {
   const timeGranularity = props.filters.timeGranularity
   const selectedRange = props.filters.selectedRange
   const topUserLimit = props.filters.topUserLimit
+  const metric = props.filters.metric
   const onFiltersChange = props.onFiltersChange
 
   const timeRange = useMemo(() => {
+    if (props.filters.startDate && props.filters.endDate) {
+      return {
+        start_timestamp: Math.floor(props.filters.startDate.getTime() / 1000),
+        end_timestamp: Math.floor(props.filters.endDate.getTime() / 1000),
+      }
+    }
     const { start, end } = getRollingDateRange(selectedRange)
     return {
       start_timestamp: Math.floor(start.getTime() / 1000),
       end_timestamp: Math.floor(end.getTime() / 1000),
     }
-  }, [selectedRange])
+  }, [props.filters.endDate, props.filters.startDate, selectedRange])
 
   const handleRangeChange = useCallback(
     (days: number) => {
-      onFiltersChange({ ...props.filters, selectedRange: days })
+      onFiltersChange({
+        ...props.filters,
+        selectedRange: days,
+        startDate: undefined,
+        endDate: undefined,
+      })
     },
     [onFiltersChange, props.filters]
   )
@@ -115,6 +134,17 @@ export function UserCharts(props: UserChartsProps) {
   const handleTopUserLimitChange = useCallback(
     (limit: number) => {
       onFiltersChange({ ...props.filters, topUserLimit: limit })
+    },
+    [onFiltersChange, props.filters]
+  )
+
+  const handleDateRangeChange = useCallback(
+    (range: { start?: Date; end?: Date }) => {
+      onFiltersChange({
+        ...props.filters,
+        startDate: range.start,
+        endDate: range.end,
+      })
     },
     [onFiltersChange, props.filters]
   )
@@ -142,24 +172,40 @@ export function UserCharts(props: UserChartsProps) {
     staleTime: 60_000,
   })
 
+  const { data: userModelTokenData, isLoading: isUserModelTokenLoading } =
+    useQuery({
+      queryKey: ['dashboard', 'user-model-token-stats', timeRange, props.filters.username],
+      queryFn: () => getUserModelTokenStats({ ...timeRange, username: props.filters.username }),
+      select: (res) => (res.success ? res.data : []),
+      staleTime: 60_000,
+    })
+
+  // local handler for username filter
+  const handleUsernameChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onFiltersChange({ ...props.filters, username: e.target.value })
+    },
+    [onFiltersChange, props.filters]
+  )
+
   const chartData = useMemo(
     () =>
       processUserChartData(
         isLoading ? [] : (userData ?? []),
         timeGranularity,
         t,
-        topUserLimit
+        topUserLimit,
+        metric
       ),
-    [userData, isLoading, timeGranularity, t, topUserLimit]
+    [userData, isLoading, timeGranularity, t, topUserLimit, metric]
   )
 
   return (
     <div className='space-y-3'>
-      <div className='flex items-center gap-1.5 overflow-x-auto pb-1 sm:gap-2'>
+      <div className='flex flex-wrap items-center gap-1.5 sm:gap-2'>
         <Tabs
           value={String(selectedRange)}
           onValueChange={(value) => handleRangeChange(Number(value))}
-          className='shrink-0'
         >
           <TabsList>
             {TIME_RANGE_PRESETS.map((preset) => (
@@ -174,12 +220,18 @@ export function UserCharts(props: UserChartsProps) {
           </TabsList>
         </Tabs>
 
+        <CompactDateTimeRangePicker
+          start={props.filters.startDate}
+          end={props.filters.endDate}
+          onChange={handleDateRangeChange}
+          className='h-8 w-auto max-w-72 text-xs'
+        />
+
         <Tabs
           value={timeGranularity}
           onValueChange={(value) =>
             handleGranularityChange(value as TimeGranularity)
           }
-          className='shrink-0'
         >
           <TabsList>
             {TIME_GRANULARITY_OPTIONS.map((opt) => (
@@ -197,7 +249,6 @@ export function UserCharts(props: UserChartsProps) {
         <Tabs
           value={String(topUserLimit)}
           onValueChange={(value) => handleTopUserLimitChange(Number(value))}
-          className='shrink-0'
         >
           <TabsList>
             <span className='text-muted-foreground px-2 text-xs font-medium whitespace-nowrap'>
@@ -214,6 +265,40 @@ export function UserCharts(props: UserChartsProps) {
             ))}
           </TabsList>
         </Tabs>
+
+        <div className='ml-2'>
+          <input
+            type='text'
+            value={props.filters.username || ''}
+            onChange={handleUsernameChange}
+            placeholder={t('Filter by username')}
+            className='h-8 rounded-md border px-2 text-xs'
+          />
+        </div>
+
+        <label className='bg-muted/50 flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs font-medium whitespace-nowrap'>
+          <span
+            className={metric === 'quota' ? 'text-foreground' : 'text-muted-foreground'}
+          >
+            {t('Quota')}
+          </span>
+          <Switch
+            size='sm'
+            checked={metric === 'tokens'}
+            onCheckedChange={(checked) =>
+              onFiltersChange({
+                ...props.filters,
+                metric: checked ? 'tokens' : 'quota',
+              })
+            }
+            aria-label={t('Show token usage')}
+          />
+          <span
+            className={metric === 'tokens' ? 'text-foreground' : 'text-muted-foreground'}
+          >
+            {t('Tokens')}
+          </span>
+        </label>
 
         {isLoading && (
           <Loader2 className='text-muted-foreground size-4 animate-spin' />
@@ -256,6 +341,11 @@ export function UserCharts(props: UserChartsProps) {
           )
         })}
       </div>
+
+      <UserModelTokenTable
+        data={userModelTokenData ?? []}
+        loading={isUserModelTokenLoading}
+      />
     </div>
   )
 }

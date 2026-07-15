@@ -23,6 +23,7 @@ import type {
   FlowQuotaDataItem,
   QuotaDataItem,
   UptimeGroupResult,
+  UserModelTokenStatsItem,
 } from './types'
 
 // ============================================================================
@@ -83,6 +84,18 @@ export async function getModelTokenStats(
     endpoint,
     { params }
   )
+  return res.data
+}
+
+export async function getUserModelTokenStats(params: {
+  start_timestamp: number
+  end_timestamp: number
+  username?: string
+}) {
+  const res = await api.get<{
+    success: boolean
+    data: UserModelTokenStatsItem[]
+  }>('/api/data/user-model-token-stats', { params })
   return res.data
 }
 

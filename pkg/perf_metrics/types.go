@@ -19,9 +19,11 @@ type Sample struct {
 }
 
 type QueryParams struct {
-	Model string
-	Group string
-	Hours int
+	Model   string
+	Group   string
+	Hours   int
+	StartTs int64
+	EndTs   int64
 }
 
 type BucketPoint struct {
@@ -38,6 +40,7 @@ type GroupResult struct {
 	AvgLatencyMs int64         `json:"avg_latency_ms"`
 	SuccessRate  float64       `json:"success_rate"`
 	AvgTps       float64       `json:"avg_tps"`
+	RequestCount int64         `json:"request_count"`
 	Series       []BucketPoint `json:"series"`
 }
 
@@ -53,7 +56,7 @@ type ModelSummary struct {
 	SuccessRate        float64   `json:"success_rate"`
 	AvgTps             float64   `json:"avg_tps"`
 	RecentSuccessRates []float64 `json:"recent_success_rates,omitempty"`
-	RequestCount       int64     `json:"-"`
+	RequestCount       int64     `json:"request_count"`
 }
 
 type SummaryAllResult struct {

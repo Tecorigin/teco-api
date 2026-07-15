@@ -89,9 +89,21 @@ const LazyPerformanceOverview = lazy(() =>
   }))
 )
 
+const LazyModelPerformanceStatistics = lazy(() =>
+  import('./components/models/model-performance-statistics').then((m) => ({
+    default: m.ModelPerformanceStatistics,
+  }))
+)
+
 const LazyUserCharts = lazy(() =>
   import('./components/users/user-charts').then((m) => ({
     default: m.UserCharts,
+  }))
+)
+
+const LazyModelSLOTab = lazy(() =>
+  import('./components/model-slo/model-slo-tab').then((m) => ({
+    default: m.ModelSLOTab,
   }))
 )
 
@@ -167,6 +179,9 @@ const SECTION_META: Record<DashboardSectionId, { titleKey: string }> = {
   users: {
     titleKey: 'User Analytics',
   },
+  'model-slo': {
+    titleKey: 'Model SLO Analytics',
+  },
 }
 
 export function Dashboard() {
@@ -191,6 +206,8 @@ export function Dashboard() {
         timeGranularity: granularity,
         selectedRange: getDefaultDays(granularity),
         topUserLimit: 10,
+        metric: 'quota',
+        username: undefined,
       }
     }
   )
@@ -340,6 +357,11 @@ export function Dashboard() {
                   </Suspense>
                 </FadeIn>
               )}
+              <FadeIn delay={0.08}>
+                <Suspense fallback={<PerformanceOverviewFallback />}>
+                  <LazyModelPerformanceStatistics filters={modelFilters} />
+                </Suspense>
+              </FadeIn>
               <FadeIn delay={0.1}>
                 <Suspense fallback={<ModelChartsFallback />}>
                   <LazyConsumptionDistributionChart
@@ -383,6 +405,13 @@ export function Dashboard() {
                   filters={userChartsFilters}
                   onFiltersChange={setUserChartsFilters}
                 />
+              </Suspense>
+            </FadeIn>
+          )}
+          {activeSection === 'model-slo' && (
+            <FadeIn>
+              <Suspense fallback={<ModelChartsFallback />}>
+                <LazyModelSLOTab />
               </Suspense>
             </FadeIn>
           )}

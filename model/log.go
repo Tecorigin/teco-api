@@ -14,6 +14,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"gorm.io/gorm"
+
+	"github.com/bytedance/gopkg/util/gopool"
 )
 
 func applyExplicitLogTextFilter(tx *gorm.DB, column string, value string) (*gorm.DB, error) {
@@ -386,16 +388,21 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	}
 	if common.DataExportEnabled {
 		LogQuotaData(QuotaDataLogParams{
-			UserID:    userId,
-			Username:  username,
-			ModelName: params.ModelName,
-			Quota:     params.Quota,
-			CreatedAt: createdAt,
-			TokenUsed: params.PromptTokens + params.CompletionTokens,
-			UseGroup:  params.Group,
-			TokenID:   params.TokenId,
-			ChannelID: params.ChannelId,
-			NodeName:  common.NodeName,
+			UserID:              userId,
+			Username:            username,
+			ModelName:           params.ModelName,
+			Quota:               params.Quota,
+			CreatedAt:           createdAt,
+			TokenUsed:           params.PromptTokens + params.CompletionTokens,
+			PromptTokens:        params.PromptTokens,
+			CompletionTokens:    params.CompletionTokens,
+			CacheReadTokens:     getMapIntValue(params.Other, "cache_tokens"),
+			CacheWriteTokens:    getMapIntValue(params.Other, "cache_write_tokens"),
+			CacheCreationTokens: getMapIntValue(params.Other, "cache_creation_tokens"),
+			UseGroup:            params.Group,
+			TokenID:             params.TokenId,
+			ChannelID:           params.ChannelId,
+			NodeName:            common.NodeName,
 		})
 	}
 }
@@ -448,15 +455,18 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 			nodeName = common.NodeName
 		}
 		LogQuotaData(QuotaDataLogParams{
-			UserID:    params.UserId,
-			Username:  username,
-			ModelName: params.ModelName,
-			Quota:     params.Quota,
-			CreatedAt: createdAt,
-			UseGroup:  params.Group,
-			TokenID:   params.TokenId,
-			ChannelID: params.ChannelId,
-			NodeName:  nodeName,
+			UserID:              params.UserId,
+			Username:            username,
+			ModelName:           params.ModelName,
+			Quota:               params.Quota,
+			CreatedAt:           createdAt,
+			CacheReadTokens:     getMapIntValue(params.Other, "cache_tokens"),
+			CacheWriteTokens:    getMapIntValue(params.Other, "cache_write_tokens"),
+			CacheCreationTokens: getMapIntValue(params.Other, "cache_creation_tokens"),
+			UseGroup:            params.Group,
+			TokenID:             params.TokenId,
+			ChannelID:           params.ChannelId,
+			NodeName:            nodeName,
 		})
 	}
 }
