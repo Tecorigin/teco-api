@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
+
 import { createSectionRegistry } from '@/features/system-settings/utils/section-registry'
 
 /**
@@ -26,19 +27,27 @@ const DASHBOARD_SECTIONS = [
   {
     id: 'overview',
     titleKey: 'Overview',
-    descriptionKey: 'View dashboard overview and statistics',
     build: () => null,
   },
   {
     id: 'models',
     titleKey: 'Model Call Analytics',
-    descriptionKey: 'View model call count analytics and charts',
+    build: () => null,
+  },
+  {
+    id: 'flow',
+    titleKey: 'Flow',
     build: () => null,
   },
   {
     id: 'users',
     titleKey: 'User Analytics',
-    descriptionKey: 'View user consumption statistics and charts',
+    adminOnly: true,
+    build: () => null,
+  },
+  {
+    id: 'model-slo',
+    titleKey: 'Model SLO Analytics',
     adminOnly: true,
     build: () => null,
   },
@@ -46,7 +55,7 @@ const DASHBOARD_SECTIONS = [
 
 export type DashboardSectionId = (typeof DASHBOARD_SECTIONS)[number]['id']
 
-const ADMIN_ONLY_SECTIONS = new Set<string>(['users'])
+const ADMIN_ONLY_SECTIONS = new Set<string>(['users', 'model-slo'])
 
 const dashboardRegistry = createSectionRegistry<
   DashboardSectionId,

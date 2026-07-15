@@ -2,7 +2,7 @@
 
 echo "building web..."
 cd web/default
-bun run build
+bun install && bun run build
 cd ../..
 echo "build new-api..."
 rm new-api

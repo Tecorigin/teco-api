@@ -31,17 +31,16 @@ func BuildAuditPromptForRequest(request dto.Request) string {
 		collectGeminiTexts(req, &userTexts, &systemTexts, &otherTexts)
 	}
 
-	parts := make([]string, 0, 3)
 	if len(userTexts) > 0 {
-		parts = append(parts, "user\n"+strings.Join(userTexts, "\n"))
+		return strings.TrimSpace(strings.Join(userTexts, "\n"))
 	}
 	if len(systemTexts) > 0 {
-		parts = append(parts, "system\n"+strings.Join(systemTexts, "\n"))
+		return ""
 	}
-	if len(parts) == 0 && len(otherTexts) > 0 {
-		parts = append(parts, strings.Join(otherTexts, "\n"))
+	if len(otherTexts) > 0 {
+		return strings.TrimSpace(strings.Join(otherTexts, "\n"))
 	}
-	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+	return ""
 }
 
 func collectOpenAITexts(req *dto.GeneralOpenAIRequest, userTexts, systemTexts, otherTexts *[]string) {
@@ -333,11 +332,14 @@ func claudeMessageText(message dto.ClaudeMessage) string {
 
 var (
 	userInputTagPattern          = regexp.MustCompile(`(?is)<user_input>(.*?)</user_input>`)
+	userRequestTagPattern        = regexp.MustCompile(`(?is)<userRequest>(.*?)</userRequest>`)
 	assistantResponseTagPattern  = regexp.MustCompile(`(?is)<assistant_response>(.*?)</assistant_response>`)
 	environmentContextTagPattern = regexp.MustCompile(`(?is)<environment_context>(.*?)</environment_context>`)
+	contextTagPattern            = regexp.MustCompile(`(?is)<context>(.*?)</context>`)
+	reminderInstructionsPattern  = regexp.MustCompile(`(?is)<reminderInstructions>(.*?)</reminderInstructions>`)
 	systemReminderTagPattern     = regexp.MustCompile(`(?is)<system-reminder>(.*?)</system-reminder>`)
 	toolInstructionsTagPattern   = regexp.MustCompile(`(?is)<tool_instructions>(.*?)</tool_instructions>`)
-	instructionsTagPattern       = regexp.MustCompile(`(?is)<instructions>(.*?)</instructions>`)
+	instructionsTagPattern       = regexp.MustCompile(`(?is)<instructions(?:\s[^>]*)?>(.*?)</instructions>`)
 )
 
 // BuildAuditPromptFromRawText preprocesses full raw context text into audit-friendly sections.
@@ -349,27 +351,22 @@ func BuildAuditPromptFromRawText(text string) string {
 	}
 
 	userTexts := extractUserTextsFromInputText(trimmed)
-	systemTexts := extractSystemTextsFromInputText(trimmed)
-
-	parts := make([]string, 0, 2)
 	if len(userTexts) > 0 {
-		parts = append(parts, "user\n"+strings.Join(userTexts, "\n"))
+		return strings.TrimSpace(strings.Join(userTexts, "\n"))
 	}
-	if len(systemTexts) > 0 {
-		parts = append(parts, "system\n"+strings.Join(systemTexts, "\n"))
+	if cleaned := stripNonUserWrappedSections(trimmed); cleaned != "" {
+		return cleaned
 	}
-	if len(parts) == 0 {
-		if cleaned := stripNonUserWrappedSections(trimmed); cleaned != "" {
-			parts = append(parts, cleaned)
-		}
-	}
-	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+	return ""
 }
 
 func extractUserTextsFromInputText(text string) []string {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
 		return nil
+	}
+	if texts := extractTaggedTexts(trimmed, userRequestTagPattern); len(texts) > 0 {
+		return texts
 	}
 	if texts := extractTaggedTexts(trimmed, userInputTagPattern); len(texts) > 0 {
 		return texts
@@ -388,9 +385,11 @@ func extractSystemTextsFromInputText(text string) []string {
 	}
 	patterns := []*regexp.Regexp{
 		instructionsTagPattern,
+		reminderInstructionsPattern,
 		systemReminderTagPattern,
 		toolInstructionsTagPattern,
 		environmentContextTagPattern,
+		contextTagPattern,
 	}
 	result := make([]string, 0)
 	for _, pattern := range patterns {
@@ -418,6 +417,8 @@ func stripNonUserWrappedSections(text string) string {
 	cleaned := text
 	closedPatterns := []*regexp.Regexp{
 		assistantResponseTagPattern,
+		contextTagPattern,
+		reminderInstructionsPattern,
 		environmentContextTagPattern,
 		systemReminderTagPattern,
 		toolInstructionsTagPattern,

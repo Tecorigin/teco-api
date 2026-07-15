@@ -5,14 +5,19 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/QuantumNous/new-api/model"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 )
 
 func GetPerfMetricsSummary(c *gin.Context) {
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	hours := 24
 	if rawHours := c.Query("hours"); rawHours != "" {
 		if parsed, err := strconv.Atoi(rawHours); err == nil {
@@ -20,7 +25,8 @@ func GetPerfMetricsSummary(c *gin.Context) {
 		}
 	}
 
-	result, err := perfmetrics.QuerySummaryAll(hours)
+	activeGroups := append(lo.Keys(ratio_setting.GetGroupRatioCopy()), "auto")
+	result, err := perfmetrics.QuerySummaryAllWithRange(startTimestamp, endTimestamp, hours, activeGroups)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -36,6 +42,8 @@ func GetPerfMetricsSummary(c *gin.Context) {
 }
 
 func GetPerfMetricsSummaryPrometheus(c *gin.Context) {
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	hours := 24
 	if rawHours := c.Query("hours"); rawHours != "" {
 		if parsed, err := strconv.Atoi(rawHours); err == nil {
@@ -43,7 +51,8 @@ func GetPerfMetricsSummaryPrometheus(c *gin.Context) {
 		}
 	}
 
-	result, err := perfmetrics.QuerySummaryAll(hours)
+	activeGroups := append(lo.Keys(ratio_setting.GetGroupRatioCopy()), "auto")
+	result, err := perfmetrics.QuerySummaryAllWithRange(startTimestamp, endTimestamp, hours, activeGroups)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -77,6 +86,8 @@ func GetPerfMetrics(c *gin.Context) {
 		return
 	}
 
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	hours := 24
 	if rawHours := c.Query("hours"); rawHours != "" {
 		if parsed, err := strconv.Atoi(rawHours); err == nil {
@@ -85,9 +96,11 @@ func GetPerfMetrics(c *gin.Context) {
 	}
 
 	result, err := perfmetrics.Query(perfmetrics.QueryParams{
-		Model: modelName,
-		Group: c.Query("group"),
-		Hours: hours,
+		Model:   modelName,
+		Group:   c.Query("group"),
+		Hours:   hours,
+		StartTs: startTimestamp,
+		EndTs:   endTimestamp,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -105,15 +118,49 @@ func GetPerfMetrics(c *gin.Context) {
 	})
 }
 
-func filterActiveGroups(groups []perfmetrics.GroupResult) []perfmetrics.GroupResult {
-	activeGroups := ratio_setting.GetGroupRatioCopy()
-	filtered := make([]perfmetrics.GroupResult, 0, len(groups))
-	for _, g := range groups {
-		if _, ok := activeGroups[g.Group]; ok || g.Group == "auto" {
-			filtered = append(filtered, g)
+func GetModelSLOMetrics(c *gin.Context) {
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	hours := 24
+	if rawHours := c.Query("hours"); rawHours != "" {
+		if parsed, err := strconv.Atoi(rawHours); err == nil {
+			hours = parsed
 		}
 	}
-	return filtered
+	if startTimestamp <= 0 || endTimestamp <= 0 || startTimestamp >= endTimestamp {
+		endTimestamp = time.Now().Unix()
+		startTimestamp = endTimestamp - int64(hours)*3600
+	}
+
+	sloThresholdMs := int64(5000)
+	if rawThreshold := c.Query("slo_threshold_ms"); rawThreshold != "" {
+		if parsed, err := strconv.ParseInt(rawThreshold, 10, 64); err == nil && parsed > 0 {
+			sloThresholdMs = parsed
+		}
+	}
+
+	activeGroups := append(lo.Keys(ratio_setting.GetGroupRatioCopy()), "auto")
+	rows, err := model.GetModelSLOStats(startTimestamp, endTimestamp, c.Query("model_name"), activeGroups, sloThresholdMs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    gin.H{"models": rows},
+	})
+}
+
+func filterActiveGroups(groups []perfmetrics.GroupResult) []perfmetrics.GroupResult {
+	activeRatios := ratio_setting.GetGroupRatioCopy()
+	return lo.Filter(groups, func(g perfmetrics.GroupResult, _ int) bool {
+		_, ok := activeRatios[g.Group]
+		return ok || g.Group == "auto"
+	})
 }
 
 func prometheusLabelValue(value string) string {

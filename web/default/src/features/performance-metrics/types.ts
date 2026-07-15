@@ -26,6 +26,7 @@ export type PerformanceSeriesPoint = {
 
 export type PerformanceGroup = {
   group: string
+  request_count?: number
   avg_ttft_ms: number
   avg_latency_ms: number
   success_rate: number
@@ -48,6 +49,7 @@ export type PerfModelSummary = {
   avg_latency_ms: number
   success_rate: number
   avg_tps: number
+  recent_success_rates?: number[]
   request_count?: number
 }
 
@@ -56,5 +58,24 @@ export type PerfSummaryAllData = {
   message?: string
   data: {
     models: PerfModelSummary[]
+  }
+}
+
+export type ModelSLOMetric = {
+  model_name: string
+  request_count: number
+  success_count: number
+  rpm: number
+  tpm: number
+  p99_latency_ms: number
+  p99_tpot_ms: number
+  slo: number
+}
+
+export type ModelSLOMetricsData = {
+  success: boolean
+  message?: string
+  data: {
+    models: ModelSLOMetric[]
   }
 }

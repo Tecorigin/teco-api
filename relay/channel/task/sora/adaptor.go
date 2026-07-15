@@ -62,7 +62,7 @@ type responseTask struct {
 }
 
 type syncVideoResponse struct {
-	Created     int64 `json:"created"`
+	Created     int64  `json:"created"`
 	ElapsedTime string `json:"elapsed_time,omitempty"`
 	Data        []struct {
 		URL         string `json:"url"`

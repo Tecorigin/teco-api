@@ -37,9 +37,7 @@ func TestBuildAuditPromptForRequest_OpenAIResponsesInputRoleSeparation(t *testin
 
 	got := BuildAuditPromptForRequest(req)
 
-	require.Contains(t, got, "user\n现在保存的user内容太多，帮我精简。")
-	require.NotContains(t, got, "user\nFilesystem sandboxing")
-	require.Contains(t, got, "system\nFilesystem sandboxing")
+	require.Equal(t, "现在保存的user内容太多，帮我精简。", got)
 }
 
 func TestBuildAuditPromptForRequest_OpenAIResponsesInputStringWrapped(t *testing.T) {
@@ -51,10 +49,9 @@ func TestBuildAuditPromptForRequest_OpenAIResponsesInputStringWrapped(t *testing
 
 	got := BuildAuditPromptForRequest(req)
 
-	require.True(t, strings.HasPrefix(got, "user\n"))
+	require.False(t, strings.HasPrefix(got, "user\n"))
 	require.Contains(t, got, "这是用户问题")
-	require.NotContains(t, got, "user\ninternal context")
-	require.Contains(t, got, "system\ninternal context")
+	require.NotContains(t, got, "internal context")
 }
 
 func TestBuildAuditPromptForRequest_StripSystemReminderAndInstructionsFromUser(t *testing.T) {
@@ -66,12 +63,26 @@ func TestBuildAuditPromptForRequest_StripSystemReminderAndInstructionsFromUser(t
 
 	got := BuildAuditPromptForRequest(req)
 
-	require.Contains(t, got, "user\n真正的用户问题")
-	require.NotContains(t, got, "user\n敏感系统提醒")
-	require.NotContains(t, got, "user\n这是指令块")
-	require.Contains(t, got, "system\n")
-	require.Contains(t, got, "敏感系统提醒")
-	require.Contains(t, got, "这是指令块")
+	require.Equal(t, "真正的用户问题", got)
+}
+
+func TestBuildAuditPromptForRequest_OpenAIResponsesInputStringUserRequestOnly(t *testing.T) {
+	req := &dto.OpenAIResponsesRequest{}
+	wrapped := `<reminderInstructions>*****</reminderInstructions>
+<userRequest>
+你好啊，你是谁
+</userRequest>
+<context>****</context>
+<userRequest>
+再介绍一下你能做什么
+</userRequest>`
+	wrappedJSON, err := common.Marshal(wrapped)
+	require.NoError(t, err)
+	req.Input = wrappedJSON
+
+	got := BuildAuditPromptForRequest(req)
+
+	require.Equal(t, "你好啊，你是谁\n再介绍一下你能做什么", got)
 }
 
 func TestBuildAuditPromptFromRawText_BeforeTruncation(t *testing.T) {
@@ -79,7 +90,5 @@ func TestBuildAuditPromptFromRawText_BeforeTruncation(t *testing.T) {
 
 	got := BuildAuditPromptFromRawText(raw)
 
-	require.Contains(t, got, "user\n用户问题在前面。")
-	require.NotContains(t, got, "user\n系统说明")
-	require.Contains(t, got, "system\n系统说明")
+	require.Equal(t, "用户问题在前面。", got)
 }

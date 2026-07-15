@@ -17,26 +17,71 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
-import type { PerformanceMetricsData, PerfSummaryAllData } from './types'
+
+import type {
+  ModelSLOMetricsData,
+  PerformanceMetricsData,
+  PerfSummaryAllData,
+} from './types'
+
+export type PerfSummaryParams = {
+  hours?: number
+  start_timestamp?: number
+  end_timestamp?: number
+}
+
+export type PerfMetricsParams = {
+  group?: string
+  hours?: number
+  start_timestamp?: number
+  end_timestamp?: number
+}
+
+export type ModelSLOMetricsParams = {
+  hours?: number
+  start_timestamp?: number
+  end_timestamp?: number
+  model_name?: string
+  slo_threshold_ms?: number
+}
 
 export async function getPerfMetricsSummary(
-  hours = 24
+  hoursOrParams: number | PerfSummaryParams = 24
 ): Promise<PerfSummaryAllData> {
+  const params =
+    typeof hoursOrParams === 'number'
+      ? { hours: hoursOrParams }
+      : hoursOrParams ?? {}
+
   const res = await api.get<PerfSummaryAllData>('/api/perf-metrics/summary', {
-    params: { hours },
+    params,
   })
   return res.data
 }
 
 export async function getPerfMetrics(
   modelName: string,
-  hours = 24
+  hoursOrParams: number | PerfMetricsParams = 24
 ): Promise<PerformanceMetricsData> {
+  const params =
+    typeof hoursOrParams === 'number'
+      ? { hours: hoursOrParams }
+      : hoursOrParams ?? {}
+
   const res = await api.get<PerformanceMetricsData>('/api/perf-metrics', {
     params: {
       model: modelName,
-      hours,
+      ...params,
     },
+  })
+  return res.data
+}
+
+export async function getModelSLOMetrics(
+  params: ModelSLOMetricsParams
+): Promise<ModelSLOMetricsData> {
+  const res = await api.get<ModelSLOMetricsData>('/api/perf-metrics/model-slo', {
+    params,
   })
   return res.data
 }
