@@ -68,6 +68,7 @@ export type ModelSLOMetric = {
   rpm: number
   tpm: number
   p99_latency_ms: number
+  p99_ttft_ms: number
   p99_tpot_ms: number
   slo: number
 }
@@ -77,5 +78,23 @@ export type ModelSLOMetricsData = {
   message?: string
   data: {
     models: ModelSLOMetric[]
+  }
+}
+
+export type SLAMetric = {
+  username: string
+  model_name: string
+  total_windows: number
+  error_windows: number
+  total_reqs: number
+  failed_reqs: number
+  sla: number
+}
+
+export type SLAMetricsData = {
+  success: boolean
+  message?: string
+  data: {
+    rows: SLAMetric[]
   }
 }

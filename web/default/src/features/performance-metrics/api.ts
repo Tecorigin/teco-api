@@ -22,6 +22,7 @@ import type {
   ModelSLOMetricsData,
   PerformanceMetricsData,
   PerfSummaryAllData,
+  SLAMetricsData,
 } from './types'
 
 export type PerfSummaryParams = {
@@ -42,7 +43,8 @@ export type ModelSLOMetricsParams = {
   start_timestamp?: number
   end_timestamp?: number
   model_name?: string
-  slo_threshold_ms?: number
+  slo_ttft_threshold_ms?: number
+  slo_tpot_threshold_ms?: number
 }
 
 export async function getPerfMetricsSummary(
@@ -81,6 +83,23 @@ export async function getModelSLOMetrics(
   params: ModelSLOMetricsParams
 ): Promise<ModelSLOMetricsData> {
   const res = await api.get<ModelSLOMetricsData>('/api/perf-metrics/model-slo', {
+    params,
+  })
+  return res.data
+}
+
+export type SLAMetricsParams = {
+  hours?: number
+  start_timestamp?: number
+  end_timestamp?: number
+  username?: string
+  model_name?: string
+}
+
+export async function getSLAMetrics(
+  params: SLAMetricsParams
+): Promise<SLAMetricsData> {
+  const res = await api.get<SLAMetricsData>('/api/perf-metrics/model-sla', {
     params,
   })
   return res.data

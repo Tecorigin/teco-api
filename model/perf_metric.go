@@ -134,15 +134,16 @@ func PerfMetricStartTime(hours int) int64 {
 
 // PerfMetricSample stores per-request samples for percentile and SLO analytics.
 type PerfMetricSample struct {
-	Id               int64  `json:"id" gorm:"primaryKey"`
-	ModelName        string `json:"model_name" gorm:"size:128;index:idx_perf_sample_model_bucket,priority:1;index:idx_perf_sample_bucket"`
-	Group            string `json:"group" gorm:"column:group;size:64;index:idx_perf_sample_model_bucket,priority:2"`
-	BucketTs         int64  `json:"bucket_ts" gorm:"index:idx_perf_sample_model_bucket,priority:3;index:idx_perf_sample_bucket"`
-	LatencyMs        int64  `json:"latency_ms" gorm:"default:0"`
-	TpotMs           int64  `json:"tpot_ms" gorm:"default:0"`
-	OutputTokens     int64  `json:"output_tokens" gorm:"default:0"`
-	Success          bool   `json:"success"`
-	CreatedAt        int64  `json:"created_at" gorm:"index:idx_perf_sample_created_at"`
+	Id           int64  `json:"id" gorm:"primaryKey"`
+	ModelName    string `json:"model_name" gorm:"size:128;index:idx_perf_sample_model_bucket,priority:1;index:idx_perf_sample_bucket"`
+	Group        string `json:"group" gorm:"column:group;size:64;index:idx_perf_sample_model_bucket,priority:2"`
+	BucketTs     int64  `json:"bucket_ts" gorm:"index:idx_perf_sample_model_bucket,priority:3;index:idx_perf_sample_bucket"`
+	LatencyMs    int64  `json:"latency_ms" gorm:"default:0"`
+	TtftMs       int64  `json:"ttft_ms" gorm:"default:0"`
+	TpotMs       int64  `json:"tpot_ms" gorm:"default:0"`
+	OutputTokens int64  `json:"output_tokens" gorm:"default:0"`
+	Success      bool   `json:"success"`
+	CreatedAt    int64  `json:"created_at" gorm:"index:idx_perf_sample_created_at"`
 }
 
 func (PerfMetricSample) TableName() string {
@@ -164,17 +165,18 @@ func DeletePerfMetricSamplesBefore(cutoffTs int64) error {
 }
 
 type ModelSLOStatsRow struct {
-	ModelName      string  `json:"model_name"`
-	RequestCount   int64   `json:"request_count"`
-	SuccessCount   int64   `json:"success_count"`
-	Rpm            float64 `json:"rpm"`
-	Tpm            float64 `json:"tpm"`
-	P99LatencyMs   int64   `json:"p99_latency_ms"`
-	P99TpotMs      int64   `json:"p99_tpot_ms"`
-	Slo            float64 `json:"slo"`
+	ModelName    string  `json:"model_name"`
+	RequestCount int64   `json:"request_count"`
+	SuccessCount int64   `json:"success_count"`
+	Rpm          float64 `json:"rpm"`
+	Tpm          float64 `json:"tpm"`
+	P99LatencyMs int64   `json:"p99_latency_ms"`
+	P99TtftMs    int64   `json:"p99_ttft_ms"`
+	P99TpotMs    int64   `json:"p99_tpot_ms"`
+	Slo          float64 `json:"slo"`
 }
 
-func GetModelSLOStats(startTs int64, endTs int64, modelName string, groups []string, sloThresholdMs int64) ([]ModelSLOStatsRow, error) {
+func GetModelSLOStats(startTs int64, endTs int64, modelName string, groups []string, sloTtftThresholdMs int64, sloTpotThresholdMs int64) ([]ModelSLOStatsRow, error) {
 	var samples []PerfMetricSample
 	query := DB.Model(&PerfMetricSample{}).
 		Where("created_at >= ? AND created_at <= ?", startTs, endTs)
@@ -200,8 +202,11 @@ func GetModelSLOStats(startTs int64, endTs int64, modelName string, groups []str
 		successCount int64
 		outputTokens int64
 		latencies    []int64
+		ttfts        []int64
 		tpots        []int64
 		sloHits      int64
+		bucketRpm    map[int64]int64
+		bucketTpm    map[int64]int64
 	}
 
 	byModel := make(map[string]*agg)
@@ -209,6 +214,8 @@ func GetModelSLOStats(startTs int64, endTs int64, modelName string, groups []str
 		current := byModel[sample.ModelName]
 		if current == nil {
 			current = &agg{}
+			current.bucketRpm = make(map[int64]int64)
+			current.bucketTpm = make(map[int64]int64)
 			byModel[sample.ModelName] = current
 		}
 		current.requestCount++
@@ -217,22 +224,28 @@ func GetModelSLOStats(startTs int64, endTs int64, modelName string, groups []str
 		}
 		current.outputTokens += sample.OutputTokens
 		current.latencies = append(current.latencies, sample.LatencyMs)
+		current.ttfts = append(current.ttfts, sample.TtftMs)
 		current.tpots = append(current.tpots, sample.TpotMs)
-		if sample.Success && sample.LatencyMs > 0 && sample.LatencyMs <= sloThresholdMs {
+		current.bucketRpm[sample.BucketTs]++
+		current.bucketTpm[sample.BucketTs] += sample.OutputTokens
+		// SLO = success AND TTFT <= thresholdA AND TPOT <= thresholdB
+		if sample.Success && sample.TtftMs > 0 && sample.TtftMs <= sloTtftThresholdMs && sample.TpotMs > 0 && sample.TpotMs <= sloTpotThresholdMs {
 			current.sloHits++
 		}
 	}
 
-	windowMinutes := math.Max(float64(endTs-startTs)/60.0, 1)
 	rows := make([]ModelSLOStatsRow, 0, len(byModel))
 	for name, current := range byModel {
+		peakRPM := peakBucketValue(current.bucketRpm)
+		peakTPM := peakBucketValue(current.bucketTpm)
 		rows = append(rows, ModelSLOStatsRow{
 			ModelName:    name,
 			RequestCount: current.requestCount,
 			SuccessCount: current.successCount,
-			Rpm:          float64(current.requestCount) / windowMinutes,
-			Tpm:          float64(current.outputTokens) / windowMinutes,
+			Rpm:          float64(peakRPM),
+			Tpm:          float64(peakTPM),
 			P99LatencyMs: percentileInt64(current.latencies, 0.99),
+			P99TtftMs:    percentileInt64(current.ttfts, 0.99),
 			P99TpotMs:    percentileInt64(current.tpots, 0.99),
 			Slo:          percent(current.sloHits, current.requestCount),
 		})
@@ -267,6 +280,16 @@ func percent(hit int64, total int64) float64 {
 		return 0
 	}
 	return math.Round((float64(hit)/float64(total))*10000) / 100
+}
+
+func peakBucketValue(values map[int64]int64) int64 {
+	var peak int64
+	for _, value := range values {
+		if value > peak {
+			peak = value
+		}
+	}
+	return peak
 }
 
 func escapeLikeValue(value string) string {

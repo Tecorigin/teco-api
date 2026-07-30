@@ -107,6 +107,12 @@ const LazyModelSLOTab = lazy(() =>
   }))
 )
 
+const LazyModelSLATab = lazy(() =>
+  import('./components/model-sla/model-sla-tab').then((m) => ({
+    default: m.ModelSLATab,
+  }))
+)
+
 const LazyFlowCharts = lazy(() =>
   import('./components/flow/flow-charts').then((m) => ({
     default: m.FlowCharts,
@@ -182,6 +188,9 @@ const SECTION_META: Record<DashboardSectionId, { titleKey: string }> = {
   'model-slo': {
     titleKey: 'Model SLO Analytics',
   },
+  'model-sla': {
+    titleKey: 'Model SLA Analytics',
+  },
 }
 
 export function Dashboard() {
@@ -243,7 +252,11 @@ export function Dashboard() {
   const visibleSections = useMemo(
     () =>
       DASHBOARD_SECTION_IDS.filter(
-        (section) => section !== 'overview' && (section !== 'users' || isAdmin)
+        (section) =>
+          section !== 'overview' &&
+          (section !== 'users' || isAdmin) &&
+          (section !== 'model-slo' || isAdmin) &&
+          (section !== 'model-sla' || isAdmin)
       ),
     [isAdmin]
   )
@@ -412,6 +425,13 @@ export function Dashboard() {
             <FadeIn>
               <Suspense fallback={<ModelChartsFallback />}>
                 <LazyModelSLOTab />
+              </Suspense>
+            </FadeIn>
+          )}
+          {activeSection === 'model-sla' && (
+            <FadeIn>
+              <Suspense fallback={<ModelChartsFallback />}>
+                <LazyModelSLATab />
               </Suspense>
             </FadeIn>
           )}

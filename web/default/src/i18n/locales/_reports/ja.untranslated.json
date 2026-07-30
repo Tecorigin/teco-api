@@ -68,6 +68,7 @@
   "Show all models": "Show all models",
   "Showing likely image models and your successful models.": "Showing likely image models and your successful models.",
   "SLO ≤ {{ms}} ms": "SLO ≤ {{ms}} ms",
+  "SLO TPOT ≤ {{ms}} ms": "SLO TPOT ≤ {{ms}} ms",
   "Some historical images use temporary URLs and may expire.": "Some historical images use temporary URLs and may expire.",
   "Some historical videos use temporary URLs and may expire.": "Some historical videos use temporary URLs and may expire.",
   "Temporary image URL": "Temporary image URL",

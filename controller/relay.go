@@ -131,8 +131,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	} else if originalMeta := request.GetTokenCountMeta(); originalMeta != nil && originalMeta.CombineText != "" {
 		if raw := service.BuildAuditPromptFromRawText(originalMeta.CombineText); raw != "" {
 			common.SetContextKey(c, constant.ContextKeyAuditPromptRaw, raw)
-		} else {
-			common.SetContextKey(c, constant.ContextKeyAuditPromptRaw, originalMeta.CombineText)
 		}
 	}
 	if filterResult := service.ApplyKeywordFilterOnRequest(request); filterResult.Changed {
@@ -150,8 +148,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	} else if meta != nil && meta.CombineText != "" {
 		if finalText := service.BuildAuditPromptFromRawText(meta.CombineText); finalText != "" {
 			common.SetContextKey(c, constant.ContextKeyAuditPromptFinal, finalText)
-		} else {
-			common.SetContextKey(c, constant.ContextKeyAuditPromptFinal, meta.CombineText)
 		}
 	}
 

@@ -445,11 +445,16 @@ func recordSample(sample Sample, bucketTs int64) {
 	if sample.OutputTokens > 0 && sample.GenerationMs > 0 {
 		tpotMs = sample.GenerationMs / sample.OutputTokens
 	}
+	ttftMs := int64(0)
+	if sample.HasTtft && sample.TtftMs >= 0 {
+		ttftMs = sample.TtftMs
+	}
 	if err := model.CreatePerfMetricSample(&model.PerfMetricSample{
 		ModelName:    sample.Model,
 		Group:        sample.Group,
 		BucketTs:     bucketTs,
 		LatencyMs:    sample.LatencyMs,
+		TtftMs:       ttftMs,
 		TpotMs:       tpotMs,
 		OutputTokens: sample.OutputTokens,
 		Success:      sample.Success,

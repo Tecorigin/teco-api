@@ -132,15 +132,21 @@ func GetModelSLOMetrics(c *gin.Context) {
 		startTimestamp = endTimestamp - int64(hours)*3600
 	}
 
-	sloThresholdMs := int64(5000)
-	if rawThreshold := c.Query("slo_threshold_ms"); rawThreshold != "" {
+	sloTtftThresholdMs := int64(2000)
+	if rawThreshold := c.Query("slo_ttft_threshold_ms"); rawThreshold != "" {
 		if parsed, err := strconv.ParseInt(rawThreshold, 10, 64); err == nil && parsed > 0 {
-			sloThresholdMs = parsed
+			sloTtftThresholdMs = parsed
+		}
+	}
+	sloTpotThresholdMs := int64(100)
+	if rawThreshold := c.Query("slo_tpot_threshold_ms"); rawThreshold != "" {
+		if parsed, err := strconv.ParseInt(rawThreshold, 10, 64); err == nil && parsed > 0 {
+			sloTpotThresholdMs = parsed
 		}
 	}
 
 	activeGroups := append(lo.Keys(ratio_setting.GetGroupRatioCopy()), "auto")
-	rows, err := model.GetModelSLOStats(startTimestamp, endTimestamp, c.Query("model_name"), activeGroups, sloThresholdMs)
+	rows, err := model.GetModelSLOStats(startTimestamp, endTimestamp, c.Query("model_name"), activeGroups, sloTtftThresholdMs, sloTpotThresholdMs)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -152,6 +158,35 @@ func GetModelSLOMetrics(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    gin.H{"models": rows},
+	})
+}
+
+func GetSLAMetrics(c *gin.Context) {
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	hours := 24
+	if rawHours := c.Query("hours"); rawHours != "" {
+		if parsed, err := strconv.Atoi(rawHours); err == nil {
+			hours = parsed
+		}
+	}
+	if startTimestamp <= 0 || endTimestamp <= 0 || startTimestamp >= endTimestamp {
+		endTimestamp = time.Now().Unix()
+		startTimestamp = endTimestamp - int64(hours)*3600
+	}
+
+	rows, err := model.GetSLAStats(startTimestamp, endTimestamp, c.Query("username"), c.Query("model_name"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    gin.H{"rows": rows},
 	})
 }
 

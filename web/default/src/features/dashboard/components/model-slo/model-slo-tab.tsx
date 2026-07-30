@@ -26,19 +26,37 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useDebounce } from '@/hooks/use-debounce'
 import { getModelSLOMetrics } from '@/features/performance-metrics/api'
 import { CompactDateTimeRangePicker } from '@/features/usage-logs/components/compact-date-time-range-picker'
 import { TIME_RANGE_PRESETS } from '@/features/dashboard/constants'
 import { getRollingDateRange } from '@/lib/time'
 
-const SLO_THRESHOLD_OPTIONS = [1000, 2000, 3000, 5000, 8000]
-const MODEL_SLO_THRESHOLD_STORAGE_KEY = 'dashboard.model-slo.threshold-ms'
+const SLO_TTFT_THRESHOLD_OPTIONS = [500, 1000, 2000, 3000, 5000]
+const SLO_TPOT_THRESHOLD_OPTIONS = [50, 100, 150, 200, 300]
+const MODEL_SLO_TTFT_THRESHOLD_STORAGE_KEY = 'dashboard.model-slo.ttft-threshold-ms'
+const MODEL_SLO_TPOT_THRESHOLD_STORAGE_KEY = 'dashboard.model-slo.tpot-threshold-ms'
 
-type SortKey = 'model_name' | 'slo' | 'p99_latency_ms' | 'p99_tpot_ms' | 'rpm' | 'tpm'
+type SortKey = 'model_name' | 'slo' | 'p99_latency_ms' | 'p99_ttft_ms' | 'p99_tpot_ms' | 'rpm' | 'tpm'
 type SortDirection = 'asc' | 'desc'
 
 function formatDecimal(value: number, digits = 2) {
   return Number.isFinite(value) ? value.toFixed(digits) : '0.00'
+}
+
+function formatDecimalWithGrouping(value: number, digits = 2) {
+  if (!Number.isFinite(value)) return '0.00'
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value)
+}
+
+function formatLatency(valueMs: number) {
+  if (valueMs >= 1000) {
+    return `${formatDecimal(valueMs / 1000)} s`
+  }
+  return `${valueMs} ms`
 }
 
 export function ModelSLOTab() {
@@ -47,11 +65,18 @@ export function ModelSLOTab() {
   const [startDate, setStartDate] = useState<Date | undefined>()
   const [endDate, setEndDate] = useState<Date | undefined>()
   const [modelName, setModelName] = useState('')
-  const [sloThresholdMs, setSloThresholdMs] = useState(() => {
-    if (typeof window === 'undefined') return 5000
-    const raw = window.localStorage.getItem(MODEL_SLO_THRESHOLD_STORAGE_KEY)
+  const debouncedModelName = useDebounce(modelName, 400)
+  const [sloTtftThresholdMs, setSloTtftThresholdMs] = useState(() => {
+    if (typeof window === 'undefined') return 2000
+    const raw = window.localStorage.getItem(MODEL_SLO_TTFT_THRESHOLD_STORAGE_KEY)
     const parsed = Number(raw)
-    return SLO_THRESHOLD_OPTIONS.includes(parsed) ? parsed : 5000
+    return SLO_TTFT_THRESHOLD_OPTIONS.includes(parsed) ? parsed : 2000
+  })
+  const [sloTpotThresholdMs, setSloTpotThresholdMs] = useState(() => {
+    if (typeof window === 'undefined') return 100
+    const raw = window.localStorage.getItem(MODEL_SLO_TPOT_THRESHOLD_STORAGE_KEY)
+    const parsed = Number(raw)
+    return SLO_TPOT_THRESHOLD_OPTIONS.includes(parsed) ? parsed : 100
   })
   const [sortKey, setSortKey] = useState<SortKey>('slo')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
@@ -79,18 +104,27 @@ export function ModelSLOTab() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     window.localStorage.setItem(
-      MODEL_SLO_THRESHOLD_STORAGE_KEY,
-      String(sloThresholdMs)
+      MODEL_SLO_TTFT_THRESHOLD_STORAGE_KEY,
+      String(sloTtftThresholdMs)
     )
-  }, [sloThresholdMs])
+  }, [sloTtftThresholdMs])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(
+      MODEL_SLO_TPOT_THRESHOLD_STORAGE_KEY,
+      String(sloTpotThresholdMs)
+    )
+  }, [sloTpotThresholdMs])
 
   const metricsQuery = useQuery({
-    queryKey: ['model-slo-metrics', timeRange, modelName],
+    queryKey: ['model-slo-metrics', timeRange, debouncedModelName, sloTtftThresholdMs, sloTpotThresholdMs],
     queryFn: () =>
       getModelSLOMetrics({
         ...timeRange,
-        model_name: modelName || undefined,
-        slo_threshold_ms: sloThresholdMs,
+        model_name: debouncedModelName || undefined,
+        slo_ttft_threshold_ms: sloTtftThresholdMs,
+        slo_tpot_threshold_ms: sloTpotThresholdMs,
       }),
     staleTime: 60_000,
   })
@@ -179,16 +213,32 @@ export function ModelSLOTab() {
         />
 
         <Select
-          value={String(sloThresholdMs)}
-          onValueChange={(value) => setSloThresholdMs(Number(value ?? 5000))}
+          value={String(sloTtftThresholdMs)}
+          onValueChange={(value) => setSloTtftThresholdMs(Number(value ?? 2000))}
         >
           <SelectTrigger className='h-8 min-w-[150px] text-xs'>
-            <SelectValue placeholder={t('SLO threshold')} />
+            <SelectValue placeholder={t('SLO TTFT threshold')} />
           </SelectTrigger>
           <SelectContent>
-            {SLO_THRESHOLD_OPTIONS.map((value) => (
+            {SLO_TTFT_THRESHOLD_OPTIONS.map((value) => (
               <SelectItem key={value} value={String(value)}>
-                {t('SLO ≤ {{ms}} ms', { ms: value })}
+                {t('SLO TTFT ≤ {{ms}} ms', { ms: value })}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={String(sloTpotThresholdMs)}
+          onValueChange={(value) => setSloTpotThresholdMs(Number(value ?? 100))}
+        >
+          <SelectTrigger className='h-8 min-w-[150px] text-xs'>
+            <SelectValue placeholder={t('SLO TPOT threshold')} />
+          </SelectTrigger>
+          <SelectContent>
+            {SLO_TPOT_THRESHOLD_OPTIONS.map((value) => (
+              <SelectItem key={value} value={String(value)}>
+                {t('SLO TPOT ≤ {{ms}} ms', { ms: value })}
               </SelectItem>
             ))}
           </SelectContent>
@@ -212,6 +262,7 @@ export function ModelSLOTab() {
                 <TableHead>{renderSortableHead(t('Model'), 'model_name')}</TableHead>
                 <TableHead className='text-right'>{renderSortableHead(t('SLO'), 'slo', 'right')}</TableHead>
                 <TableHead className='text-right'>{renderSortableHead(t('P99 Latency'), 'p99_latency_ms', 'right')}</TableHead>
+                <TableHead className='text-right'>{renderSortableHead(t('P99 TTFT'), 'p99_ttft_ms', 'right')}</TableHead>
                 <TableHead className='text-right'>{renderSortableHead(t('P99 TPOT'), 'p99_tpot_ms', 'right')}</TableHead>
                 <TableHead className='text-right'>{renderSortableHead(t('RPM'), 'rpm', 'right')}</TableHead>
                 <TableHead className='text-right'>{renderSortableHead(t('TPM'), 'tpm', 'right')}</TableHead>
@@ -221,7 +272,7 @@ export function ModelSLOTab() {
               {metricsQuery.isLoading ? (
                 Array.from({ length: 8 }).map((_, idx) => (
                   <TableRow key={idx}>
-                    <TableCell colSpan={6}>
+                    <TableCell colSpan={7}>
                       <Skeleton className='h-8 w-full' />
                     </TableCell>
                   </TableRow>
@@ -231,15 +282,16 @@ export function ModelSLOTab() {
                   <TableRow key={row.model_name}>
                     <TableCell className='font-medium'>{row.model_name}</TableCell>
                     <TableCell className='text-right'>{formatDecimal(row.slo)}%</TableCell>
-                    <TableCell className='text-right'>{row.p99_latency_ms} ms</TableCell>
-                    <TableCell className='text-right'>{row.p99_tpot_ms} ms</TableCell>
+                    <TableCell className='text-right'>{formatLatency(row.p99_latency_ms)}</TableCell>
+                    <TableCell className='text-right'>{formatLatency(row.p99_ttft_ms)}</TableCell>
+                    <TableCell className='text-right'>{formatLatency(row.p99_tpot_ms)}</TableCell>
                     <TableCell className='text-right'>{formatDecimal(row.rpm)}</TableCell>
-                    <TableCell className='text-right'>{formatDecimal(row.tpm)}</TableCell>
+                    <TableCell className='text-right'>{formatDecimalWithGrouping(row.tpm)}</TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className='text-muted-foreground py-8 text-center'>
+                  <TableCell colSpan={7} className='text-muted-foreground py-8 text-center'>
                     {t('No model SLO data available for the selected range.')}
                   </TableCell>
                 </TableRow>

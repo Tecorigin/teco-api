@@ -40,6 +40,54 @@ func TestBuildAuditPromptForRequest_OpenAIResponsesInputRoleSeparation(t *testin
 	require.Equal(t, "现在保存的user内容太多，帮我精简。", got)
 }
 
+func TestBuildAuditPromptForRequest_OpenAIMessagesUserContentTaggedOnly(t *testing.T) {
+	req := &dto.GeneralOpenAIRequest{
+		Messages: []dto.Message{
+			{Role: "system", Content: `<instructions>系统内容</instructions>`},
+			{Role: "user", Content: `<environment_context>上下文</environment_context><userRequest>你好</userRequest>`},
+			{Role: "user", Content: `<user_input>今天星期几</user_input>`},
+		},
+	}
+
+	got := BuildAuditPromptForRequest(req)
+
+	require.Equal(t, "你好\n今天星期几", got)
+}
+
+func TestBuildAuditPromptForRequest_OpenAIMessagesUserContentFallbackLastText(t *testing.T) {
+	req := &dto.GeneralOpenAIRequest{
+		Messages: []dto.Message{
+			{Role: "user", Content: "前一条问题"},
+			{Role: "user", Content: []any{map[string]any{"type": "text", "text": "今天星期几"}}},
+		},
+	}
+
+	got := BuildAuditPromptForRequest(req)
+
+	require.Equal(t, "今天星期几", got)
+}
+
+func TestBuildAuditPromptForRequest_OpenAIMessagesTaggedPreferredOverLaterFallback(t *testing.T) {
+	req := &dto.GeneralOpenAIRequest{
+		Messages: []dto.Message{
+			{Role: "user", Content: `<userRequest>第一个问题</userRequest>`},
+			{Role: "user", Content: "后续很长的表格内容不该覆盖标签内容"},
+		},
+	}
+
+	got := BuildAuditPromptForRequest(req)
+
+	require.Equal(t, "第一个问题", got)
+}
+
+func TestNormalizeUserAuditText_FallbackTruncates(t *testing.T) {
+	longText := strings.Repeat("数", auditPromptFallbackMaxRunes+20)
+
+	got := normalizeUserAuditText(longText)
+
+	require.Len(t, []rune(got), auditPromptFallbackMaxRunes)
+}
+
 func TestBuildAuditPromptForRequest_OpenAIResponsesInputStringWrapped(t *testing.T) {
 	req := &dto.OpenAIResponsesRequest{}
 	wrapped := `<environment_context>internal context</environment_context><user_input>这是用户问题</user_input>`
@@ -90,5 +138,77 @@ func TestBuildAuditPromptFromRawText_BeforeTruncation(t *testing.T) {
 
 	got := BuildAuditPromptFromRawText(raw)
 
-	require.Equal(t, "用户问题在前面。", got)
+	require.Equal(t, "", got)
+}
+
+func TestBuildAuditPromptFromRawText_UserRequestIgnoresOuterText(t *testing.T) {
+	raw := `<userRequest>
+<environment_info>
+The user's current OS is: Linux
+</environment_info>
+<userRequest>
+你好啊，
+</userRequest>   现在还是保存了这样的内容， 我希望的是只保存 你好啊
+</userRequest>`
+
+	got := BuildAuditPromptFromRawText(raw)
+
+	require.Equal(t, "你好啊，", got)
+}
+
+func TestBuildAuditPromptForRequest_OpenAIResponsesInputStringWithoutUserTagsFallsBackToContent(t *testing.T) {
+	req := &dto.OpenAIResponsesRequest{}
+	wrappedJSON, err := common.Marshal(`<environment_context>internal context</environment_context>这是外层上下文`)
+	require.NoError(t, err)
+	req.Input = wrappedJSON
+
+	got := BuildAuditPromptForRequest(req)
+
+	require.Equal(t, "这是外层上下文", got)
+}
+
+func TestBuildAuditPromptForRequest_StripsRegexFragmentBeforeTaggedUserText(t *testing.T) {
+	req := &dto.GeneralOpenAIRequest{
+		Messages: []dto.Message{
+			{Role: "user", Content: `(.*?)
+<userRequest>明天是星期几</userRequest>`},
+		},
+	}
+
+	got := BuildAuditPromptForRequest(req)
+
+	require.Equal(t, "明天是星期几", got)
+}
+
+func TestBuildAuditPromptForRequest_FallbackStripsSystemReminder(t *testing.T) {
+	req := &dto.GeneralOpenAIRequest{
+		Messages: []dto.Message{
+			{Role: "user", Content: `<system-reminder>这些是系统提醒</system-reminder>明天是星期几`},
+		},
+	}
+
+	got := BuildAuditPromptForRequest(req)
+
+	require.Equal(t, "明天是星期几", got)
+}
+
+func TestBuildAuditPromptForRequest_StripsRegexFragmentsAcrossMultipleTaggedMessages(t *testing.T) {
+	req := &dto.GeneralOpenAIRequest{
+		Messages: []dto.Message{
+			{Role: "user", Content: `(.*?)
+<userRequest>明天是星期几</userRequest>`},
+			{Role: "user", Content: `(.*?)
+<userRequest>昨夜雨疏风骤</userRequest>`},
+		},
+	}
+
+	got := BuildAuditPromptForRequest(req)
+
+	require.Equal(t, "明天是星期几\n昨夜雨疏风骤", got)
+}
+
+func TestNormalizeUserAuditText_StripsStandaloneRegexFragments(t *testing.T) {
+	got := normalizeUserAuditText("(.*?)\n明天是星期几\n(.*?)")
+
+	require.Equal(t, "明天是星期几", got)
 }
