@@ -88,6 +88,27 @@ func SetRelayRouter(router *gin.Engine) {
 	relayV1Router.Use(middleware.TokenAuth())
 	relayV1Router.Use(middleware.ModelRequestRateLimit())
 	{
+		// Knowledge base APIs via API token. All requests use the token owner's
+		// dedicated knowledge-base organization.
+		knowledgeBaseRouter := relayV1Router.Group("/knowledge")
+		{
+			knowledgeBaseRouter.POST("/chat/completions", controller.KbTokenChat)
+			knowledgeBaseRouter.POST("/list", controller.KbList)
+			knowledgeBaseRouter.POST("/create", controller.KbCreate)
+			knowledgeBaseRouter.POST("/delete", controller.KbDelete)
+			knowledgeBaseRouter.POST("/clear", controller.KbClear)
+			knowledgeBaseRouter.POST("/list_docs", controller.KbListDocs)
+			knowledgeBaseRouter.POST("/delete_docs", controller.KbDeleteDocs)
+			knowledgeBaseRouter.POST("/upload_docs", controller.KbUploadDocs)
+			knowledgeBaseRouter.POST("/run_index", controller.KbRunIndex)
+			knowledgeBaseRouter.POST("/task_status", controller.KbTaskStatus)
+			knowledgeBaseRouter.POST("/chat/create_session", controller.KbCreateSession)
+			knowledgeBaseRouter.POST("/chat/delete_session", controller.KbDeleteSession)
+			knowledgeBaseRouter.POST("/chat/list_sessions", controller.KbListSessions)
+			knowledgeBaseRouter.POST("/chat/session_chat", controller.KbSessionChat)
+		}
+	}
+	{
 		// WebSocket 路由（统一到 Relay）
 		wsRouter := relayV1Router.Group("")
 		wsRouter.Use(middleware.Distribute())

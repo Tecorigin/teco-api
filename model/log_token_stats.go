@@ -40,6 +40,7 @@ func GetUserModelTokenStats(startTime int64, endTime int64, username string) ([]
 		Username            string `gorm:"column:username"`
 		ModelName           string `gorm:"column:model_name"`
 		RequestCount        int64  `gorm:"column:request_count"`
+		TokenUsed           int64  `gorm:"column:token_used"`
 		PromptTokens        int64  `gorm:"column:prompt_tokens"`
 		CompletionTokens    int64  `gorm:"column:completion_tokens"`
 		CacheReadTokens     int64  `gorm:"column:cache_read_tokens"`
@@ -48,7 +49,7 @@ func GetUserModelTokenStats(startTime int64, endTime int64, username string) ([]
 	}
 	var rows []*quotaDataTokenStatsRow
 	query := DB.Table("quota_data").
-		Select("username, model_name, COALESCE(SUM(count), 0) AS request_count, COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens, COALESCE(SUM(completion_tokens), 0) AS completion_tokens, COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens, COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens, COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens").
+		Select("username, model_name, COALESCE(SUM(count), 0) AS request_count, COALESCE(SUM(token_used), 0) AS token_used, COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens, COALESCE(SUM(completion_tokens), 0) AS completion_tokens, COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens, COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens, COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens").
 		Where("created_at >= ? and created_at <= ?", startTime, endTime).
 		Where("username <> '' and model_name <> ''")
 	if username != "" {
@@ -76,7 +77,7 @@ func GetUserModelTokenStats(startTime int64, endTime int64, username string) ([]
 				CacheCreationTokens: row.CacheCreationTokens,
 			},
 		}
-		item.TotalTokens = item.PromptTokens + item.CompletionTokens + item.CacheReadTokens + item.CacheWriteTokens
+		item.TotalTokens = row.TokenUsed
 		result = append(result, item)
 	}
 	// If quota_data returned no rows (likely backfill not completed for this range),
@@ -140,7 +141,7 @@ func GetUserModelTokenStats(startTime int64, endTime int64, username string) ([]
 			}
 		}
 		for _, item := range statsMap {
-			item.TotalTokens = item.PromptTokens + item.CompletionTokens + item.CacheReadTokens + item.CacheWriteTokens
+			item.TotalTokens = item.PromptTokens + item.CompletionTokens
 			result = append(result, item)
 		}
 	}

@@ -32,11 +32,11 @@ func SetApiRouter(router *gin.Engine) {
 		//apiRouter.GET("/midjourney", controller.GetMidjourney)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
 		apiRouter.GET("/pricing", middleware.HeaderNavModuleAuth("pricing"), controller.GetPricing)
+		apiRouter.GET("/perf-metrics/summary/prometheus", controller.GetPerfMetricsSummaryPrometheus)
 		perfMetricsRoute := apiRouter.Group("/perf-metrics")
 		perfMetricsRoute.Use(middleware.HeaderNavModulePublicOrUserAuth("pricing"))
 		{
 			perfMetricsRoute.GET("/summary", controller.GetPerfMetricsSummary)
-			perfMetricsRoute.GET("/summary/prometheus", controller.GetPerfMetricsSummaryPrometheus)
 			perfMetricsRoute.GET("/model-slo", controller.GetModelSLOMetrics)
 			perfMetricsRoute.GET("/model-sla", middleware.AdminAuth(), controller.GetSLAMetrics)
 			perfMetricsRoute.GET("", controller.GetPerfMetrics)
@@ -393,6 +393,35 @@ func SetApiRouter(router *gin.Engine) {
 			deploymentsRoute.PUT("/:id/name", controller.UpdateDeploymentName)
 			deploymentsRoute.POST("/:id/extend", controller.ExtendDeployment)
 			deploymentsRoute.DELETE("/:id", controller.DeleteDeployment)
+		}
+
+		// Knowledge base (third-party integration)
+		kbRoute := apiRouter.Group("/knowledge-base")
+		kbRoute.Use(middleware.UserAuth())
+		{
+			kbRoute.GET("/status", controller.GetKnowledgeBaseStatus)
+			kbRoute.POST("/enable", controller.EnableKnowledgeBase)
+			kbRoute.POST("/disable", controller.DisableKnowledgeBase)
+
+			kbRoute.POST("/list", controller.KbList)
+			kbRoute.POST("/create", controller.KbCreate)
+			kbRoute.POST("/delete", controller.KbDelete)
+			kbRoute.POST("/clear", controller.KbClear)
+			kbRoute.POST("/list_docs", controller.KbListDocs)
+			kbRoute.POST("/delete_docs", controller.KbDeleteDocs)
+			kbRoute.POST("/upload_docs", controller.KbUploadDocs)
+			kbRoute.POST("/run_index", controller.KbRunIndex)
+			kbRoute.POST("/task_status", controller.KbTaskStatus)
+
+			kbRoute.POST("/chat/create_session", controller.KbCreateSession)
+			kbRoute.POST("/chat/delete_session", controller.KbDeleteSession)
+			kbRoute.POST("/chat/list_sessions", controller.KbListSessions)
+			kbRoute.POST("/chat/session_chat", controller.KbSessionChat)
+		}
+		kbAdminRoute := apiRouter.Group("/knowledge-base/admin")
+		kbAdminRoute.Use(middleware.AdminAuth())
+		{
+			kbAdminRoute.GET("/users", controller.AdminListKnowledgeBaseUsers)
 		}
 	}
 }
