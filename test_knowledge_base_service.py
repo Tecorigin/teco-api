@@ -142,6 +142,85 @@ class KnowledgeBaseProbe:
         self._print_response(response)
         return response
 
+    def stream_chat(self, identity: TestIdentity, session_id: str, query: str) -> bool:
+        timestamp = str(int(time.time()))
+        nonce = uuid.uuid4().hex
+        sign_string = ":".join(
+            [identity.user_id, identity.org_id, "admin", timestamp, nonce]
+        )
+        signature = hmac.new(
+            self.api_key.encode("utf-8"),
+            sign_string.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        url = f"{self.base_url}/chat/session_chat"
+        payload = {
+            "query": query,
+            "session_id": session_id,
+            "stream": True,
+            "return_docs": True,
+        }
+        headers = {
+            "Accept": "text/event-stream",
+            "Content-Type": "application/json",
+            "X-User-Id": identity.user_id,
+            "X-Org-Id": identity.org_id,
+            "X-User-Role": "admin",
+            "X-Timestamp": timestamp,
+            "X-Nonce": nonce,
+            "X-Signature": signature,
+        }
+        print(f"\n>>> POST {url} (SSE)")
+        print(f"request headers: {format_headers(headers)}")
+        print(f"request body: {json.dumps(payload, ensure_ascii=False)}")
+
+        started_at = time.monotonic()
+        try:
+            with self.session.post(
+                url,
+                headers=headers,
+                json=payload,
+                stream=True,
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            ) as response:
+                print(f"<<< HTTP {response.status_code}")
+                print(f"response headers: {format_headers(dict(response.headers))}")
+                if not response.ok:
+                    print(f"response body: {body_preview(response.text)}")
+                    self.failed = True
+                    return False
+
+                event_count = 0
+                received_content = False
+                for line in response.iter_lines(decode_unicode=True):
+                    if not line or not line.startswith("data:"):
+                        continue
+                    event_count += 1
+                    elapsed = time.monotonic() - started_at
+                    now = time.strftime("%Y-%m-%d %H:%M:%S")
+                    data = line.removeprefix("data:").strip()
+                    try:
+                        event = json.loads(data)
+                        content = event.get("content", "")
+                        received_content = received_content or bool(content)
+                        print(
+                            f"[{now}] +{elapsed:.3f}s event={event_count} "
+                            f"content={content!r}"
+                        )
+                    except json.JSONDecodeError:
+                        print(
+                            f"[{now}] +{elapsed:.3f}s event={event_count} data={data!r}"
+                        )
+                print(
+                    f"SSE finished: events={event_count}, "
+                    f"duration={time.monotonic() - started_at:.3f}s"
+                )
+                return received_content
+        except requests.RequestException as error:
+            self.failed = True
+            print(f"<<< request failed: {error}")
+            return False
+
     def _request(
         self,
         method: str,
@@ -413,6 +492,18 @@ def run_probe(args: argparse.Namespace) -> bool:
             print("Stopping: uploaded Markdown document was not parsed with run=DONE.")
             return False
 
+        create_session_response = probe.user_request(
+            "POST", "/chat/create_session", identity
+        )
+        session_data = response_data(create_session_response)
+        if session_data is None or not session_data.get("session_id"):
+            print("Stopping: chat session creation failed.")
+            return False
+        session_id = str(session_data["session_id"])
+        if not probe.stream_chat(identity, session_id, args.chat_query):
+            print("Stopping: chat stream returned no content.")
+            return False
+
         clear_kb_response = probe.user_request(
             "POST", "/knowledge_base/clear", identity, payload={"kb_name": kb_name}
         )
@@ -437,15 +528,6 @@ def run_probe(args: argparse.Namespace) -> bool:
         ):
             print("Stopping: deleted knowledge base is still returned by list.")
             return False
-
-        create_session_response = probe.user_request(
-            "POST", "/chat/create_session", identity
-        )
-        session_data = response_data(create_session_response)
-        if session_data is None or not session_data.get("session_id"):
-            print("Chat session creation failed.")
-            return False
-        session_id = str(session_data["session_id"])
 
         list_sessions_response = probe.user_request(
             "POST", "/chat/list_sessions", identity
@@ -529,6 +611,11 @@ def main() -> int:
         type=int,
         default=300,
         help="Maximum seconds to wait for document parsing (default: 300)",
+    )
+    parser.add_argument(
+        "--chat-query",
+        default="constant 包只能被其他包引用吗？",
+        help="Question sent to the uploaded Markdown document (default: an exact document topic)",
     )
     parser.add_argument(
         "--keep-resources",
