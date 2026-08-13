@@ -132,8 +132,8 @@ export function ImageGenerationPlayground() {
   const [pendingRequest, setPendingRequest] = useState<ImageGenerationRequest | null>(null)
 
   const { data: models = [], isLoading: isLoadingModels } = useQuery({
-    queryKey: ['image-generation-models'],
-    queryFn: getUserModels,
+    queryKey: ['image-generation-models', showAllModels],
+    queryFn: () => getUserModels(showAllModels),
   })
 
   useEffect(() => {

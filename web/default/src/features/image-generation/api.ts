@@ -33,10 +33,10 @@ async function getAllModels() {
   return items as Array<{ model_name: string; tags?: string }>
 }
 
-export async function getUserModels(): Promise<ModelOption[]> {
+export async function getUserModels(includeAll = false): Promise<ModelOption[]> {
   const [userModelsRes, modelsRes] = await Promise.all([
     api.get('/api/user/models'),
-    getAllModels(),
+    includeAll ? Promise.resolve([]) : getAllModels(),
   ])
 
   const userModels = userModelsRes.data
@@ -44,6 +44,10 @@ export async function getUserModels(): Promise<ModelOption[]> {
 
   if (!userModels.success || !Array.isArray(userModels.data)) {
     return []
+  }
+
+  if (includeAll) {
+    return userModels.data.map((model: string) => ({ label: model, value: model }))
   }
 
   const imageModelSet = new Set(

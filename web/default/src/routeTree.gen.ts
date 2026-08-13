@@ -43,6 +43,7 @@ import { Route as AuthenticatedUsageLogsIndexRouteImport } from './routes/_authe
 import { Route as AuthenticatedSystemSettingsIndexRouteImport } from './routes/_authenticated/system-settings/index'
 import { Route as AuthenticatedSystemInfoIndexRouteImport } from './routes/_authenticated/system-info/index'
 import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_authenticated/subscriptions/index'
+import { Route as AuthenticatedSpeechRecognitionIndexRouteImport } from './routes/_authenticated/speech-recognition/index'
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
@@ -247,6 +248,12 @@ const AuthenticatedSubscriptionsIndexRoute =
   AuthenticatedSubscriptionsIndexRouteImport.update({
     id: '/subscriptions/',
     path: '/subscriptions/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSpeechRecognitionIndexRoute =
+  AuthenticatedSpeechRecognitionIndexRouteImport.update({
+    id: '/speech-recognition/',
+    path: '/speech-recognition/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedRedemptionCodesIndexRoute =
@@ -467,6 +474,7 @@ export interface FileRoutesByFullPath {
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
+  '/speech-recognition/': typeof AuthenticatedSpeechRecognitionIndexRoute
   '/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
@@ -530,6 +538,7 @@ export interface FileRoutesByTo {
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
+  '/speech-recognition': typeof AuthenticatedSpeechRecognitionIndexRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings': typeof AuthenticatedSystemSettingsIndexRoute
@@ -597,6 +606,7 @@ export interface FileRoutesById {
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
+  '/_authenticated/speech-recognition/': typeof AuthenticatedSpeechRecognitionIndexRoute
   '/_authenticated/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/_authenticated/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/_authenticated/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
@@ -663,6 +673,7 @@ export interface FileRouteTypes {
     | '/playground/'
     | '/profile/'
     | '/redemption-codes/'
+    | '/speech-recognition/'
     | '/subscriptions/'
     | '/system-info/'
     | '/system-settings/'
@@ -726,6 +737,7 @@ export interface FileRouteTypes {
     | '/playground'
     | '/profile'
     | '/redemption-codes'
+    | '/speech-recognition'
     | '/subscriptions'
     | '/system-info'
     | '/system-settings'
@@ -792,6 +804,7 @@ export interface FileRouteTypes {
     | '/_authenticated/playground/'
     | '/_authenticated/profile/'
     | '/_authenticated/redemption-codes/'
+    | '/_authenticated/speech-recognition/'
     | '/_authenticated/subscriptions/'
     | '/_authenticated/system-info/'
     | '/_authenticated/system-settings/'
@@ -1076,6 +1089,13 @@ declare module '@tanstack/react-router' {
       path: '/subscriptions'
       fullPath: '/subscriptions/'
       preLoaderRoute: typeof AuthenticatedSubscriptionsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/speech-recognition/': {
+      id: '/_authenticated/speech-recognition/'
+      path: '/speech-recognition'
+      fullPath: '/speech-recognition/'
+      preLoaderRoute: typeof AuthenticatedSpeechRecognitionIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/redemption-codes/': {
@@ -1391,6 +1411,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
+  AuthenticatedSpeechRecognitionIndexRoute: typeof AuthenticatedSpeechRecognitionIndexRoute
   AuthenticatedSubscriptionsIndexRoute: typeof AuthenticatedSubscriptionsIndexRoute
   AuthenticatedSystemInfoIndexRoute: typeof AuthenticatedSystemInfoIndexRoute
   AuthenticatedUsageLogsIndexRoute: typeof AuthenticatedUsageLogsIndexRoute
@@ -1421,6 +1442,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,
   AuthenticatedRedemptionCodesIndexRoute:
     AuthenticatedRedemptionCodesIndexRoute,
+  AuthenticatedSpeechRecognitionIndexRoute:
+    AuthenticatedSpeechRecognitionIndexRoute,
   AuthenticatedSubscriptionsIndexRoute: AuthenticatedSubscriptionsIndexRoute,
   AuthenticatedSystemInfoIndexRoute: AuthenticatedSystemInfoIndexRoute,
   AuthenticatedUsageLogsIndexRoute: AuthenticatedUsageLogsIndexRoute,

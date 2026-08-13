@@ -76,6 +76,11 @@ export function SidebarModulesCard() {
           description: t('Generate videos with prompts and parameters'),
         },
         {
+          key: 'speech_recognition',
+          title: t('Speech Recognition'),
+          description: t('Transcribe uploaded audio with supported models'),
+        },
+        {
           key: 'chat',
           title: t('Model Chat'),
           description: t('Chat session management'),

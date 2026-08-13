@@ -112,7 +112,7 @@ type ExtendedModelFormValues = z.infer<typeof extendedModelFormSchema>
 type PricingMode = 'per-token' | 'per-request'
 type PricingSubMode = 'ratio' | 'price'
 
-const TAG_QUICK_ACTIONS = ['文生图', '文生视频'] as const
+const TAG_QUICK_ACTIONS = ['文生图', '文生视频', '语音识别'] as const
 
 type ModelMutateDrawerProps = {
   open: boolean

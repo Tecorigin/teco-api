@@ -59,6 +59,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     playground: true,
     image_generation: true,
     video_generation: true,
+    speech_recognition: true,
     chat: true,
   },
   console: {

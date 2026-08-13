@@ -100,6 +100,10 @@ export function SidebarModulesSection({
         title: t('Text-to-Video'),
         description: t('Generate videos from prompts with tunable parameters.'),
       },
+      speech_recognition: {
+        title: t('Speech Recognition'),
+        description: t('Transcribe uploaded audio with supported models.'),
+      },
       chat: {
         title: t('Model Chat'),
         description: t('Access previous conversations and start new ones.'),

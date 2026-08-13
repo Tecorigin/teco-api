@@ -34,12 +34,13 @@ import {
   Ticket,
   User,
   Users,
+  Mic,
   Video,
   Wallet,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { type SidebarData } from '@/components/layout/types'
+import type { SidebarData } from '@/components/layout/types'
 import { ROLE } from '@/lib/roles'
 
 /**
@@ -71,6 +72,11 @@ export function useSidebarData(): SidebarData {
             title: t('Text-to-Video'),
             url: '/video-generation',
             icon: Video,
+          },
+          {
+            title: t('Speech Recognition'),
+            url: '/speech-recognition',
+            icon: Mic,
           },
           {
             title: t('Chat'),

@@ -206,8 +206,8 @@ export function VideoGenerationPlayground() {
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
 
   const { data: models = [], isLoading: isLoadingModels } = useQuery({
-    queryKey: ['video-generation-models'],
-    queryFn: getUserModels,
+    queryKey: ['video-generation-models', showAllModels],
+    queryFn: () => getUserModels(showAllModels),
   })
 
   useEffect(() => {
