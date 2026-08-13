@@ -41,6 +41,29 @@ func GetAllModelsMeta(c *gin.Context) {
 	})
 }
 
+// modelTagItem 模型体验页面需要的基础元数据（非敏感字段）
+type modelTagItem struct {
+	ModelName string `json:"model_name"`
+	Tags      string `json:"tags,omitempty"`
+	Icon      string `json:"icon,omitempty"`
+}
+
+// ListModelsTags 获取全部模型的基础元数据（模型名、标签等），
+// 供模型体验页面（文生图/文生视频）使用，普通登录用户可访问。
+// 不分页返回全部数据，仅包含非敏感字段，不含绑定渠道/分组/计费类型等管理信息。
+func ListModelsTags(c *gin.Context) {
+	models, err := model.GetAllModelTags()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	items := make([]modelTagItem, 0, len(models))
+	for _, m := range models {
+		items = append(items, modelTagItem{ModelName: m.ModelName, Tags: m.Tags, Icon: m.Icon})
+	}
+	common.ApiSuccess(c, items)
+}
+
 // SearchModelsMeta 搜索模型列表
 func SearchModelsMeta(c *gin.Context) {
 

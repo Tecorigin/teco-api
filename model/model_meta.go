@@ -110,6 +110,15 @@ func GetAllModels(offset int, limit int) ([]*Model, error) {
 	return models, err
 }
 
+// GetAllModelTags 返回全部模型的基础元数据（模型名、标签、图标），
+// 供模型体验页面（文生图/文生视频）使用。只查询少量字段且不分页，
+// 避免依赖管理端分页接口（page_size 上限 100）导致模型数量增多时拉取不全。
+func GetAllModelTags() ([]*Model, error) {
+	var models []*Model
+	err := DB.Select("id", "model_name", "tags", "icon").Order("id DESC").Find(&models).Error
+	return models, err
+}
+
 func GetBoundChannelsByModelsMap(modelNames []string) (map[string][]BoundChannel, error) {
 	result := make(map[string][]BoundChannel)
 	if len(modelNames) == 0 {

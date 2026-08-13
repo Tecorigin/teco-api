@@ -374,6 +374,10 @@ func SetApiRouter(router *gin.Engine) {
 			modelsRoute.DELETE("/:id", controller.DeleteModelMeta)
 		}
 
+		// 模型体验页面（文生图/文生视频）使用的基础模型元数据，
+		// 普通登录用户可访问，无需管理员权限，放在 /:id 之前注册以静态路径优先匹配
+		apiRouter.GET("/models/tags", middleware.UserAuth(), controller.ListModelsTags)
+
 		// Deployments (model deployment management)
 		deploymentsRoute := apiRouter.Group("/deployments")
 		deploymentsRoute.Use(middleware.AdminAuth())

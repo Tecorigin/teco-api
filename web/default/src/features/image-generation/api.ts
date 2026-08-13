@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
-import { getModels } from '@/features/models/api'
 import { parseModelTags } from '@/features/models/lib/model-utils'
 import type {
   ImageGenerationRequest,
@@ -25,24 +24,13 @@ import type {
   ModelOption,
 } from './types'
 
+// 获取全部模型的基础元数据（模型名、标签）。
+// 使用轻量接口 /api/models/tags：一次返回全部模型（无分页限制），
+// 且普通登录用户即可访问，不再依赖管理员权限的 /api/models/ 分页接口。
 async function getAllModels() {
-  const pageSize = 100
-  let page = 1
-  const items = [] as Array<{ model_name: string; tags?: string }>
-
-  while (true) {
-    const response = await getModels({ p: page, page_size: pageSize })
-    const currentItems = response.data?.items || []
-    items.push(...currentItems)
-
-    if (currentItems.length < pageSize) {
-      break
-    }
-
-    page += 1
-  }
-
-  return items
+  const response = await api.get('/api/models/tags')
+  const items = response.data?.data || []
+  return items as Array<{ model_name: string; tags?: string }>
 }
 
 export async function getUserModels(): Promise<ModelOption[]> {
