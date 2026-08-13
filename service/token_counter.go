@@ -1,9 +1,12 @@
 package service
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
+	"path"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
@@ -298,6 +301,78 @@ func EstimateRequestToken(c *gin.Context, meta *types.TokenCountMeta, info *rela
 
 	common.SetContextKey(c, constant.ContextKeyPromptTokens, tkm)
 	return tkm, nil
+}
+
+// PopulateASRInputSeconds extracts the duration of input_audio parts for a
+// tiered billing expression that references asr_s. The parsed value is frozen
+// on RelayInfo and reused for both pre-consume and settlement.
+func PopulateASRInputSeconds(c *gin.Context, meta *types.TokenCountMeta, info *relaycommon.RelayInfo) error {
+	if meta == nil || info == nil {
+		return nil
+	}
+
+	var totalSeconds float64
+	for _, file := range meta.Files {
+		if file == nil || file.FileType != types.FileTypeAudio || file.Source == nil {
+			continue
+		}
+
+		cachedData, err := LoadFileSource(c, file.Source, "asr_billing")
+		if err != nil {
+			return fmt.Errorf("load input audio for billing: %w", err)
+		}
+		base64Data, err := cachedData.GetBase64Data()
+		if err != nil {
+			return fmt.Errorf("read input audio for billing: %w", err)
+		}
+		decodedData, err := base64.StdEncoding.DecodeString(base64Data)
+		if err != nil {
+			return fmt.Errorf("decode input audio for billing: %w", err)
+		}
+
+		extension := audioExtensionFromMimeType(cachedData.MimeType)
+		if extension == "" {
+			return fmt.Errorf("unsupported input audio format for duration billing: %s", cachedData.MimeType)
+		}
+		duration, err := common.GetAudioDuration(c.Request.Context(), bytes.NewReader(decodedData), extension)
+		if err != nil {
+			return fmt.Errorf("get input audio duration for billing: %w", err)
+		}
+		if math.IsNaN(duration) || math.IsInf(duration, 0) || duration < 0 || duration > relaycommon.MaxTaskDurationSeconds {
+			return fmt.Errorf("input audio duration must be between 0 and %d seconds", relaycommon.MaxTaskDurationSeconds)
+		}
+		totalSeconds += duration
+		if totalSeconds > relaycommon.MaxTaskDurationSeconds {
+			return fmt.Errorf("total input audio duration must be at most %d seconds", relaycommon.MaxTaskDurationSeconds)
+		}
+	}
+
+	info.ASRInputSeconds = totalSeconds
+	return nil
+}
+
+func audioExtensionFromMimeType(mimeType string) string {
+	mimeType = strings.ToLower(strings.TrimSpace(strings.Split(mimeType, ";")[0]))
+	switch mimeType {
+	case "audio/mpeg", "audio/mp3":
+		return ".mp3"
+	case "audio/wav", "audio/x-wav", "audio/wave":
+		return ".wav"
+	case "audio/flac", "audio/x-flac":
+		return ".flac"
+	case "audio/mp4", "audio/m4a", "audio/x-m4a":
+		return ".m4a"
+	case "audio/ogg", "audio/vorbis", "audio/opus":
+		return ".ogg"
+	case "audio/aac":
+		return ".aac"
+	case "audio/webm":
+		return ".webm"
+	}
+	if extension := path.Ext(mimeType); extension != "" {
+		return extension
+	}
+	return ""
 }
 
 func CountTokenRealtime(info *relaycommon.RelayInfo, request dto.RealtimeEvent, model string) (int, int, error) {

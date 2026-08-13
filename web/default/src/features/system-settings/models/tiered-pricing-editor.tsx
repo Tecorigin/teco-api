@@ -604,14 +604,19 @@ function VisualTierCard({
   ) => {
     const fieldKey = variable.tierField as keyof VisualTier
     const value = unitCostToPrice((tier[fieldKey] as number | undefined) ?? 0)
+    const isASRSecondPrice = variable.priceUnit === 'per-second'
 
     return (
-      <PriceField
-        key={variable.key}
-        label={t(variable.label)}
-        value={value}
-        onChange={(next) => handlePriceChange(fieldKey, priceToUnitCost(next))}
-      />
+      <div key={variable.key} className='space-y-1'>
+        <PriceField
+          label={t(variable.label)}
+          value={value}
+          onChange={(next) => handlePriceChange(fieldKey, priceToUnitCost(next))}
+        />
+        {isASRSecondPrice && (
+          <p className='text-muted-foreground text-xs'>{t('USD per input audio second')}</p>
+        )}
+      </div>
     )
   }
 
@@ -1370,6 +1375,7 @@ function CostEstimator({ effectiveExpr }: EstimatorProps) {
     imageOutputTokens: 0,
     audioInputTokens: 0,
     audioOutputTokens: 0,
+    asrInputSeconds: 0,
   })
 
   const usesExtras = useMemo(
@@ -1418,10 +1424,10 @@ function CostEstimator({ effectiveExpr }: EstimatorProps) {
             // guaranteed to have a non-null `field` (the `len` condition-only
             // variable is filtered out). Narrow the type here for safety.
             if (!variable.field) return null
-            const stateKey = variable.field.replace(
+            const stateKey = (variable.estimatorStateKey ?? variable.field.replace(
               'Price',
               'Tokens'
-            ) as keyof ExtraTokenValues
+            )) as keyof ExtraTokenValues
             return (
               <div key={variable.key} className='space-y-1'>
                 <Label className='text-xs'>{t(variable.shortLabel)}</Label>
@@ -1489,6 +1495,7 @@ Input side:
 - cc1h — cache-create token count (1-hour TTL, Claude-specific)
 - img — image input token count
 - ai — audio input token count
+- asr_s — input_audio duration in seconds; its coefficient is USD per second
 
 Output side:
 - c — output token count. Also auto-excludes sub-categories priced separately

@@ -230,7 +230,12 @@ export function resolveMatchedTier(
 export interface TieredBillingSummary {
   tiers: ParsedTier[]
   tier: ParsedTier
-  priceEntries: Array<{ field: string; shortLabel: string; price: number }>
+  priceEntries: Array<{
+    field: string
+    shortLabel: string
+    price: number
+    priceUnit?: 'per-million-tokens' | 'per-second'
+  }>
 }
 
 /**
@@ -273,6 +278,7 @@ export function getTieredBillingSummary(
         field: v.field,
         shortLabel: v.shortLabel,
         price,
+        priceUnit: v.priceUnit,
       })
     }
   }

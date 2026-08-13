@@ -160,8 +160,6 @@ function buildTypeDetailSegments(
   const segments: DetailSegment[] = []
 
   const priceOpts = { digitsLarge: 4, digitsSmall: 6, abbreviate: false }
-  const formatPrice = (price: number) =>
-    `${formatBillingCurrencyFromUSD(price, priceOpts)}/M`
   const formatPriceCompact = (price: number) =>
     formatBillingCurrencyFromUSD(price, priceOpts)
   const formatPriceList = (prices: string[], showUnit: boolean) => {
@@ -209,7 +207,10 @@ function buildTypeDetailSegments(
               'cacheCreate1hPrice',
             ].includes(entry.field)
         )
-        .map((entry) => `${t(entry.shortLabel)} ${formatPrice(entry.price)}`)
+        .map((entry) => {
+          const unit = entry.priceUnit === 'per-second' ? '/s' : '/M'
+          return `${t(entry.shortLabel)} ${formatPriceCompact(entry.price)}${unit}`
+        })
       if (otherEntries.length > 0) {
         segments.push({
           text: otherEntries.join(' · '),

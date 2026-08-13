@@ -37,6 +37,7 @@ Powered by [expr-lang/expr](https://github.com/expr-lang/expr). Expressions are 
 | `cc1h` | 缓存创建 token 数 — 1小时 TTL（Claude 专用） |
 | `img` | 图片输入 token 数 |
 | `ai` | 音频输入 token 数 |
+| `asr_s` | ASR `input_audio` 时长（秒）。表达式运行时内部按 $10^6$ 倍缩放，使系数为美元/秒 |
 
 **输出侧变量：**
 
@@ -106,7 +107,15 @@ tier("base", p * 2 + c * 8 + img * 2.5)
 
 # Multimodal with audio
 tier("base", p * 0.43 + c * 3.06 + img * 0.78 + ai * 3.81 + ao * 15.11)
+
+# ASR input_audio billed at $0.02 per second
+tier("asr", p * 0.5 + c * 2 + asr_s * 0.02)
 ```
+
+`asr_s` only applies to `input_audio` content parts. The gateway parses the
+uploaded audio duration before pre-consume, validates the aggregate duration is
+at most 3600 seconds, then reuses that frozen value at settlement. It is not an
+audio-token variable: `asr_s * 0.02` means $0.02 per second.
 
 ### Request Rules (appended after `|||`)
 

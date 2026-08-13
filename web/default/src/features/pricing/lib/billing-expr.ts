@@ -42,6 +42,8 @@ export type BillingVar = {
   isBase?: boolean
   isConditionOnly?: boolean
   group?: string
+  priceUnit?: 'per-million-tokens' | 'per-second'
+  estimatorStateKey?: string
 }
 
 export const BILLING_VARS: BillingVar[] = [
@@ -134,6 +136,17 @@ export const BILLING_VARS: BillingVar[] = [
     shortLabel: 'Audio Out',
     side: 'output',
     group: 'media',
+  },
+  {
+    key: 'asr_s',
+    field: 'asrInputSecondPrice',
+    tierField: 'asr_input_second_unit_cost',
+    label: 'ASR input audio second price',
+    shortLabel: 'ASR Audio Seconds',
+    side: 'input',
+    group: 'media',
+    priceUnit: 'per-second',
+    estimatorStateKey: 'asrInputSeconds',
   },
 ]
 

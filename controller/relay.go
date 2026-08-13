@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	"github.com/QuantumNous/new-api/relay"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -22,6 +23,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 
@@ -126,6 +128,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken
+	usesASRSeconds := false
+	if billing_setting.GetBillingMode(relayInfo.OriginModelName) == billing_setting.BillingModeTieredExpr {
+		if exprStr, ok := billing_setting.GetBillingExpr(relayInfo.OriginModelName); ok {
+			usesASRSeconds = billingexpr.UsedVars(exprStr)["asr_s"]
+		}
+	}
 	if promptRaw := service.BuildAuditPromptForRequest(request); promptRaw != "" {
 		common.SetContextKey(c, constant.ContextKeyAuditPromptRaw, promptRaw)
 	} else if originalMeta := request.GetTokenCountMeta(); originalMeta != nil && originalMeta.CombineText != "" {
@@ -138,10 +146,16 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.
 	var meta *types.TokenCountMeta
-	if needSensitiveCheck || needCountToken {
+	if needSensitiveCheck || needCountToken || usesASRSeconds {
 		meta = request.GetTokenCountMeta()
 	} else {
 		meta = fastTokenCountMetaForPricing(request)
+	}
+	if usesASRSeconds {
+		if err := service.PopulateASRInputSeconds(c, meta, relayInfo); err != nil {
+			newAPIError = types.NewError(err, types.ErrorCodeCountTokenFailed)
+			return
+		}
 	}
 	if promptFinal := service.BuildAuditPromptForRequest(request); promptFinal != "" {
 		common.SetContextKey(c, constant.ContextKeyAuditPromptFinal, promptFinal)

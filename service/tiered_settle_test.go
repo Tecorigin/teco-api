@@ -416,7 +416,7 @@ func TestTryTieredSettle_ErrorFallbackToEstimatedQuotaAfterGroup(t *testing.T) {
 
 func tieredQuota(exprStr string, usage *dto.Usage, isClaudeSemantic bool, groupRatio float64) float64 {
 	usedVars := billingexpr.UsedVars(exprStr)
-	params := BuildTieredTokenParams(usage, isClaudeSemantic, usedVars)
+	params := BuildTieredTokenParams(usage, isClaudeSemantic, usedVars, 0)
 	cost, _, _ := billingexpr.RunExpr(exprStr, params)
 	return cost / 1_000_000 * testQuotaPerUnit * groupRatio
 }
@@ -559,6 +559,16 @@ func TestBuildTieredTokenParams_GPT_AudioOutputNoVar(t *testing.T) {
 	}
 }
 
+func TestBuildTieredTokenParamsASRSeconds(t *testing.T) {
+	params := BuildTieredTokenParams(&dto.Usage{}, false, map[string]bool{"asr_s": true}, 12.5)
+	if params.ASRS != 12_500_000 {
+		t.Fatalf("ASRS = %f, want 12500000", params.ASRS)
+	}
+	if params.P != 0 {
+		t.Fatalf("P = %f, want 0", params.P)
+	}
+}
+
 func TestBuildTieredTokenParams_ParityWithRatio(t *testing.T) {
 	// GPT-5.4 prices: input=$2.5, output=$15, cacheRead=$0.25
 	// Ratio equivalents: modelRatio=1.25, completionRatio=6, cacheRatio=0.1
@@ -618,7 +628,7 @@ func TestBuildTieredTokenParams_Len_GPT(t *testing.T) {
 	}
 	expr := `tier("base", p * 2.5 + c * 15 + cr * 0.25)`
 	usedVars := billingexpr.UsedVars(expr)
-	params := BuildTieredTokenParams(usage, false, usedVars)
+	params := BuildTieredTokenParams(usage, false, usedVars, 0)
 
 	// Non-Claude: Len = raw PromptTokens
 	if params.Len != 10000 {
@@ -644,7 +654,7 @@ func TestBuildTieredTokenParams_Len_Claude(t *testing.T) {
 	}
 	expr := `tier("base", p * 3 + c * 15 + cr * 0.3 + cc * 3.75 + cc1h * 6)`
 	usedVars := billingexpr.UsedVars(expr)
-	params := BuildTieredTokenParams(usage, true, usedVars)
+	params := BuildTieredTokenParams(usage, true, usedVars, 0)
 
 	// Claude: Len = PromptTokens + CachedTokens + CacheCreation5m + CacheCreation1h
 	wantLen := float64(5000 + 3000 + 1000 + 500)
@@ -669,7 +679,7 @@ func TestBuildTieredTokenParams_Len_TierCondition(t *testing.T) {
 	}
 	expr := `len <= 200000 ? tier("standard", p * 3 + c * 15 + cr * 0.3) : tier("long_context", p * 6 + c * 22.5 + cr * 0.6)`
 	usedVars := billingexpr.UsedVars(expr)
-	params := BuildTieredTokenParams(usage, false, usedVars)
+	params := BuildTieredTokenParams(usage, false, usedVars, 0)
 
 	// Len = 300000 (raw prompt), P = 50000 (300000 - 250000 cache)
 	if params.Len != 300000 {
@@ -736,7 +746,7 @@ func BenchmarkTieredBilling_ComplexExpr(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		usage := usages[i%len(usages)]
-		params := BuildTieredTokenParams(usage, false, usedVars)
+		params := BuildTieredTokenParams(usage, false, usedVars, 0)
 		billingexpr.RunExpr(complexTieredExpr, params)
 	}
 }
@@ -762,7 +772,7 @@ func BenchmarkTieredBilling_Parallel(b *testing.B) {
 		rng := rand.New(rand.NewSource(rand.Int63()))
 		for pb.Next() {
 			usage := randomUsage(rng)
-			params := BuildTieredTokenParams(usage, false, usedVars)
+			params := BuildTieredTokenParams(usage, false, usedVars, 0)
 			billingexpr.RunExpr(complexTieredExpr, params)
 		}
 	})

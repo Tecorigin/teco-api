@@ -214,7 +214,7 @@ function BillingBreakdown(props: {
       for (const entry of tieredSummary.priceEntries) {
         rows.push({
           label: t(entry.shortLabel),
-          value: `${fmtPrice(entry.price)}/M`,
+          value: `${fmtPrice(entry.price)}${entry.priceUnit === 'per-second' ? '/s' : '/M'}`,
         })
       }
     } else {

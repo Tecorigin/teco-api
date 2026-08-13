@@ -893,6 +893,18 @@ func TestAudioTokenVariables(t *testing.T) {
 	}
 }
 
+func TestASRSecondsVariable(t *testing.T) {
+	exprStr := `tier("asr", asr_s * 0.02)`
+	cost, _, err := billingexpr.RunExpr(exprStr, billingexpr.TokenParams{ASRS: 90 * 1_000_000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// asr_s is scaled by 1M, so $0.02/second for 90 seconds is $1.80.
+	if math.Abs(cost-1_800_000) > 1e-6 {
+		t.Errorf("cost = %f, want 1800000", cost)
+	}
+}
+
 func TestImageAudioVariables(t *testing.T) {
 	exprStr := `tier("base", p * 1 + img * 3 + ai * 5 + ao * 10)`
 	cost, _, err := billingexpr.RunExpr(exprStr, billingexpr.TokenParams{P: 100, Img: 50, AI: 20, AO: 10})

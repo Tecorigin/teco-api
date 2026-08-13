@@ -26,6 +26,9 @@ type TokenParams struct {
 	ImgO float64 // image output tokens
 	AI   float64 // audio input tokens
 	AO   float64 // audio output tokens
+	// ASRS is input audio duration in seconds, scaled by 1,000,000 so its
+	// expression coefficient remains an intuitive USD-per-second price.
+	ASRS float64
 }
 
 // TraceResult holds side-channel info captured by the tier() function

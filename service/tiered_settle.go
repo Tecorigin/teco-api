@@ -18,7 +18,7 @@ type TieredResultWrapper = billingexpr.TieredResult
 // include all sub-categories (cache, image, audio). Claude-format APIs
 // report them as text-only. This function normalizes to text-only when
 // sub-categories are separately priced.
-func BuildTieredTokenParams(usage *dto.Usage, isClaudeUsageSemantic bool, usedVars map[string]bool) billingexpr.TokenParams {
+func BuildTieredTokenParams(usage *dto.Usage, isClaudeUsageSemantic bool, usedVars map[string]bool, asrInputSeconds float64) billingexpr.TokenParams {
 	p := float64(usage.PromptTokens)
 	c := float64(usage.CompletionTokens)
 	cr := float64(usage.PromptTokensDetails.CachedTokens)
@@ -85,6 +85,7 @@ func BuildTieredTokenParams(usage *dto.Usage, isClaudeUsageSemantic bool, usedVa
 		ImgO: imgO,
 		AI:   ai,
 		AO:   ao,
+		ASRS: asrInputSeconds * 1_000_000,
 	}
 }
 
