@@ -208,7 +208,11 @@ function buildTypeDetailSegments(
             ].includes(entry.field)
         )
         .map((entry) => {
-          const unit = entry.priceUnit === 'per-second' ? '/s' : '/M'
+          const unit = entry.priceUnit === 'per-second'
+            ? '/s'
+            : entry.priceUnit === 'per-image'
+              ? '/image'
+              : '/M'
           return `${t(entry.shortLabel)} ${formatPriceCompact(entry.price)}${unit}`
         })
       if (otherEntries.length > 0) {

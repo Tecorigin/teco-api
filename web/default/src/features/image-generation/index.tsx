@@ -75,6 +75,26 @@ const IMAGE_MODEL_HINT_KEYWORDS = [
   'kandinsky',
 ]
 
+function getGeneratedImageSource(item: { url?: string; b64_json?: string }): {
+  src: string
+  sourceType: GeneratedImage['sourceType']
+} {
+  if (item.url?.startsWith('file://')) {
+    const base64 = item.url.slice('file://'.length)
+    return {
+      src: base64 ? `data:image/png;base64,${base64}` : '',
+      sourceType: 'b64_json',
+    }
+  }
+  if (item.url) {
+    return { src: item.url, sourceType: 'url' }
+  }
+  if (item.b64_json) {
+    return { src: `data:image/png;base64,${item.b64_json}`, sourceType: 'b64_json' }
+  }
+  return { src: '', sourceType: undefined }
+}
+
 function isLikelyImageModel(modelName: string): boolean {
   const normalized = modelName.trim().toLowerCase()
   if (!normalized) return false
@@ -263,16 +283,19 @@ export function ImageGenerationPlayground() {
     try {
       const response = await generateImages(normalizedPayload)
 
+      const elapsedTimes = Array.isArray(response.elapsed_time)
+        ? response.elapsed_time
+        : []
       const nextImages = (response.data || [])
         .map<GeneratedImage | null>((item, index) => {
-          const src = item.url || (item.b64_json ? `data:image/png;base64,${item.b64_json}` : '')
+          const { src, sourceType } = getGeneratedImageSource(item)
           if (!src) {
             return null
           }
           return {
             src,
-            elapsed: response.elapsed_time?.[index],
-            sourceType: item.url ? 'url' : 'b64_json',
+            elapsed: elapsedTimes[index] ?? (typeof response.elapsed_time === 'string' ? response.elapsed_time : undefined),
+            sourceType,
           }
         })
         .filter((item): item is GeneratedImage => item !== null)

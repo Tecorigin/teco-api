@@ -616,6 +616,12 @@ function VisualTierCard({
         {isASRSecondPrice && (
           <p className='text-muted-foreground text-xs'>{t('USD per input audio second')}</p>
         )}
+        {variable.priceUnit === 'per-image' && (
+          <p className='text-muted-foreground text-xs'>{t('USD per generated image')}</p>
+        )}
+        {variable.key === 'vid_s' && (
+          <p className='text-muted-foreground text-xs'>{t('USD per generated video second')}</p>
+        )}
       </div>
     )
   }
@@ -1376,6 +1382,8 @@ function CostEstimator({ effectiveExpr }: EstimatorProps) {
     audioInputTokens: 0,
     audioOutputTokens: 0,
     asrInputSeconds: 0,
+    imageGenerationCount: 0,
+    videoGenerationSeconds: 0,
   })
 
   const usesExtras = useMemo(

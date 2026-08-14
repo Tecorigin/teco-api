@@ -123,6 +123,9 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	if request.N != nil {
 		imageN = *request.N
 	}
+	if info.ImageGenerationCount > 0 {
+		imageN = info.ImageGenerationCount
+	}
 
 	// n is handled via OtherRatio so it is applied exactly once in quota
 	// calculation (both price-based and ratio-based paths).

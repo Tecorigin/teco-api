@@ -42,6 +42,8 @@ export type VisualTier = {
   audio_input_unit_cost?: number
   audio_output_unit_cost?: number
   asr_input_second_unit_cost?: number
+  image_generation_count_unit_cost?: number
+  video_generation_second_unit_cost?: number
   [field: string]: unknown
 }
 
@@ -77,6 +79,8 @@ export function normalizeVisualTier(
     audio_input_unit_cost: Number(tier.audio_input_unit_cost) || 0,
     audio_output_unit_cost: Number(tier.audio_output_unit_cost) || 0,
     asr_input_second_unit_cost: Number(tier.asr_input_second_unit_cost) || 0,
+    image_generation_count_unit_cost: Number(tier.image_generation_count_unit_cost) || 0,
+    video_generation_second_unit_cost: Number(tier.video_generation_second_unit_cost) || 0,
   }
 }
 
@@ -258,6 +262,8 @@ const ESTIMATOR_VARS = [
   { var: 'ai', stateKey: 'audioInputTokens' },
   { var: 'ao', stateKey: 'audioOutputTokens' },
   { var: 'asr_s', stateKey: 'asrInputSeconds' },
+  { var: 'img_n', stateKey: 'imageGenerationCount' },
+  { var: 'vid_s', stateKey: 'videoGenerationSeconds' },
 ] as const
 
 export type ExtraTokenValues = Record<
@@ -304,7 +310,9 @@ export function evalExprLocally(
     }
     for (const field of ESTIMATOR_VARS) {
       const value = extraTokenValues[field.stateKey] || 0
-      env[field.var] = field.var === 'asr_s' ? value * 1_000_000 : value
+      env[field.var] = ['asr_s', 'img_n', 'vid_s'].includes(field.var)
+        ? value * 1_000_000
+        : value
     }
     const fn = new Function(
       ...Object.keys(env),

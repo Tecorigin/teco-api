@@ -40,5 +40,5 @@ export interface ImageGenerationItem {
 export interface ImageGenerationResponse {
   created: number
   data: ImageGenerationItem[]
-  elapsed_time?: string[]
+  elapsed_time?: string | string[]
 }

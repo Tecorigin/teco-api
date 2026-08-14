@@ -71,6 +71,17 @@ func TestOpenaiImageStreamHandlerForwardsSSEAndUsage(t *testing.T) {
 	require.Equal(t, "text/event-stream", recorder.Header().Get("Content-Type"))
 }
 
+func TestOpenaiImageHandlerUsesActualResponseImageCount(t *testing.T) {
+	body := `{"data":[{"url":"https://example.com/image.png"}]}`
+	c, _, resp, info := newImageTestContext(t, body, "application/json", false)
+	info.ImageGenerationCount = 2
+
+	usage, err := OpenaiImageHandler(c, info, resp)
+	require.Nil(t, err)
+	require.NotNil(t, usage)
+	require.Equal(t, uint(1), info.ImageGenerationCount)
+}
+
 // TestOpenaiImageStreamHandlerWrapsJSONResponse covers the non-SSE fallback:
 // a JSON upstream response is wrapped into pseudo-SSE completed events.
 func TestOpenaiImageStreamHandlerWrapsJSONResponse(t *testing.T) {
@@ -84,6 +95,7 @@ func TestOpenaiImageStreamHandlerWrapsJSONResponse(t *testing.T) {
 
 	usage, err := OpenaiImageStreamHandler(c, info, resp)
 	require.Nil(t, err)
+	require.Equal(t, uint(1), info.ImageGenerationCount)
 	require.Equal(t, 3, usage.PromptTokens)
 	require.Equal(t, 4, usage.CompletionTokens)
 	require.Equal(t, 7, usage.TotalTokens)

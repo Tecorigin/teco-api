@@ -29,6 +29,11 @@ type TokenParams struct {
 	// ASRS is input audio duration in seconds, scaled by 1,000,000 so its
 	// expression coefficient remains an intuitive USD-per-second price.
 	ASRS float64
+	// ImgN is generated image count, and VidS is generated video duration in
+	// seconds. Both are scaled by 1,000,000 so coefficients are USD per image
+	// and USD per second respectively.
+	ImgN float64
+	VidS float64
 }
 
 // TraceResult holds side-channel info captured by the tier() function

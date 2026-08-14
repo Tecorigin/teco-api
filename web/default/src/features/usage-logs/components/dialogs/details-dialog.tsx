@@ -212,9 +212,14 @@ function BillingBreakdown(props: {
         })
       }
       for (const entry of tieredSummary.priceEntries) {
+        const unit = entry.priceUnit === 'per-second'
+          ? '/s'
+          : entry.priceUnit === 'per-image'
+            ? '/image'
+            : '/M'
         rows.push({
           label: t(entry.shortLabel),
-          value: `${fmtPrice(entry.price)}${entry.priceUnit === 'per-second' ? '/s' : '/M'}`,
+          value: `${fmtPrice(entry.price)}${unit}`,
         })
       }
     } else {

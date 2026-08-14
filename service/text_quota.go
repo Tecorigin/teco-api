@@ -352,7 +352,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		if snap := relayInfo.TieredBillingSnapshot; snap != nil {
 			tieredUsedVars = billingexpr.UsedVars(snap.ExprString)
 		}
-		tieredOk, tieredQuota, tieredRes := TryTieredSettle(relayInfo, BuildTieredTokenParams(usage, summary.IsClaudeUsageSemantic, tieredUsedVars, relayInfo.ASRInputSeconds))
+		tieredOk, tieredQuota, tieredRes := TryTieredSettle(relayInfo, BuildTieredTokenParams(usage, summary.IsClaudeUsageSemantic, tieredUsedVars, relayInfo.ASRInputSeconds, relayInfo.ImageGenerationCount, relayInfo.VideoGenerationSeconds))
 		if tieredOk {
 			tieredBillingApplied = true
 			tieredResult = tieredRes

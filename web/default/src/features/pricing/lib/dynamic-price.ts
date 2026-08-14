@@ -84,15 +84,16 @@ function applyRechargeRate(
 }
 
 export function formatDynamicUnitPrice(
-  valuePerMillionTokens: number,
-  options: DynamicPriceOptions
+  value: number,
+  options: DynamicPriceOptions,
+  priceUnit?: BillingVar['priceUnit']
 ): string {
   const groupRatio = options.groupRatioMultiplier ?? 1
   const priceRate = options.priceRate ?? 1
   const usdExchangeRate = options.usdExchangeRate ?? 1
-  const priceUSD =
-    (valuePerMillionTokens * groupRatio) /
-    TOKEN_UNIT_DIVISORS[options.tokenUnit]
+  const priceUSD = priceUnit === 'per-second' || priceUnit === 'per-image'
+    ? value * groupRatio
+    : (value * groupRatio) / TOKEN_UNIT_DIVISORS[options.tokenUnit]
   const displayPrice = applyRechargeRate(
     priceUSD,
     options.showRechargePrice ?? false,
@@ -141,7 +142,7 @@ export function getDynamicPriceEntries(
         label: variable.label,
         shortLabel: variable.shortLabel,
         value,
-        formatted: formatDynamicUnitPrice(value, options),
+        formatted: formatDynamicUnitPrice(value, options, variable.priceUnit),
         variable,
       },
     ]

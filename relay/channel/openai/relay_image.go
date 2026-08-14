@@ -38,6 +38,7 @@ func OpenaiImageHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.
 	if oaiError := usageResp.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
 	}
+	recordGeneratedImageCount(info, responseBody)
 
 	// 写入新的 response body
 	service.IOCopyBytesGracefully(c, resp, responseBody)
@@ -210,6 +211,9 @@ func OpenaiImageJSONAsStreamHandler(c *gin.Context, info *relaycommon.RelayInfo,
 	if oaiError := usageResp.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
 	}
+	if len(imageResp.Data) > 0 && info != nil {
+		info.ImageGenerationCount = uint(len(imageResp.Data))
+	}
 	normalizeOpenAIUsage(&usageResp.Usage)
 	applyUsagePostProcessing(info, &usageResp.Usage, responseBody)
 
@@ -261,6 +265,19 @@ func OpenaiImageJSONAsStreamHandler(c *gin.Context, info *relaycommon.RelayInfo,
 		info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonDone, nil)
 	}
 	return &usageResp.Usage, nil
+}
+
+func recordGeneratedImageCount(info *relaycommon.RelayInfo, responseBody []byte) {
+	if info == nil {
+		return
+	}
+	var imageResp dto.ImageResponse
+	if err := common.Unmarshal(responseBody, &imageResp); err != nil {
+		return
+	}
+	if len(imageResp.Data) > 0 {
+		info.ImageGenerationCount = uint(len(imageResp.Data))
+	}
 }
 
 func writeOpenaiImageStreamPayload(c *gin.Context, eventName string, payload any) error {

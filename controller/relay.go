@@ -125,6 +125,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)
 		return
 	}
+	if imageRequest, ok := request.(*dto.ImageRequest); ok && imageRequest.N != nil {
+		relayInfo.ImageGenerationCount = *imageRequest.N
+	}
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken

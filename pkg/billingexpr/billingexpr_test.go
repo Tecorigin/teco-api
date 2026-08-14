@@ -905,6 +905,21 @@ func TestASRSecondsVariable(t *testing.T) {
 	}
 }
 
+func TestImageCountAndVideoSecondsVariables(t *testing.T) {
+	exprStr := `tier("media", img_n * 0.03 + vid_s * 0.02)`
+	cost, _, err := billingexpr.RunExpr(exprStr, billingexpr.TokenParams{
+		ImgN: 4 * 1_000_000,
+		VidS: 15 * 1_000_000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Four images at $0.03 and fifteen seconds at $0.02 cost $0.42.
+	if math.Abs(cost-420_000) > 1e-6 {
+		t.Errorf("cost = %f, want 420000", cost)
+	}
+}
+
 func TestImageAudioVariables(t *testing.T) {
 	exprStr := `tier("base", p * 1 + img * 3 + ai * 5 + ao * 10)`
 	cost, _, err := billingexpr.RunExpr(exprStr, billingexpr.TokenParams{P: 100, Img: 50, AI: 20, AO: 10})

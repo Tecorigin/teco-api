@@ -42,7 +42,7 @@ export type BillingVar = {
   isBase?: boolean
   isConditionOnly?: boolean
   group?: string
-  priceUnit?: 'per-million-tokens' | 'per-second'
+  priceUnit?: 'per-million-tokens' | 'per-second' | 'per-image'
   estimatorStateKey?: string
 }
 
@@ -147,6 +147,28 @@ export const BILLING_VARS: BillingVar[] = [
     group: 'media',
     priceUnit: 'per-second',
     estimatorStateKey: 'asrInputSeconds',
+  },
+  {
+    key: 'img_n',
+    field: 'imageGenerationCountPrice',
+    tierField: 'image_generation_count_unit_cost',
+    label: 'Generated image price',
+    shortLabel: 'Generated Images',
+    side: 'output',
+    group: 'media',
+    priceUnit: 'per-image',
+    estimatorStateKey: 'imageGenerationCount',
+  },
+  {
+    key: 'vid_s',
+    field: 'videoGenerationSecondPrice',
+    tierField: 'video_generation_second_unit_cost',
+    label: 'Generated video second price',
+    shortLabel: 'Video Seconds',
+    side: 'output',
+    group: 'media',
+    priceUnit: 'per-second',
+    estimatorStateKey: 'videoGenerationSeconds',
   },
 ]
 

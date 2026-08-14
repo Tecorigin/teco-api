@@ -593,7 +593,7 @@ func settleTestQuota(info *relaycommon.RelayInfo, priceData types.PriceData, usa
 	if usage != nil && info != nil && info.TieredBillingSnapshot != nil {
 		isClaudeUsageSemantic := usage.UsageSemantic == "anthropic" || info.GetFinalRequestRelayFormat() == types.RelayFormatClaude
 		usedVars := billingexpr.UsedVars(info.TieredBillingSnapshot.ExprString)
-		if ok, quota, result := service.TryTieredSettle(info, service.BuildTieredTokenParams(usage, isClaudeUsageSemantic, usedVars, info.ASRInputSeconds)); ok {
+		if ok, quota, result := service.TryTieredSettle(info, service.BuildTieredTokenParams(usage, isClaudeUsageSemantic, usedVars, info.ASRInputSeconds, info.ImageGenerationCount, info.VideoGenerationSeconds)); ok {
 			return quota, result
 		}
 	}
