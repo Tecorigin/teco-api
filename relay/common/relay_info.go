@@ -119,7 +119,8 @@ type RelayInfo struct {
 	// pre-consume and reused during settlement.
 	ASRInputSeconds        float64
 	ImageGenerationCount   uint
-	VideoGenerationSeconds int
+	VideoGenerationSeconds float64
+	TTSInputCharacters     int
 	ReasoningEffort        string
 	UserSetting            dto.UserSetting
 	UserEmail              string
@@ -752,6 +753,7 @@ func (t *TaskSubmitReq) UnmarshalJSON(data []byte) error {
 	aux := &struct {
 		Metadata json.RawMessage `json:"metadata,omitempty"`
 		Duration json.RawMessage `json:"duration,omitempty"`
+		Seconds  json.RawMessage `json:"seconds,omitempty"`
 		*Alias
 	}{
 		Alias: (*Alias)(t),
@@ -771,6 +773,18 @@ func (t *TaskSubmitReq) UnmarshalJSON(data []byte) error {
 				if v, err := strconv.Atoi(durationStr); err == nil {
 					t.Duration = v
 				}
+			}
+		}
+	}
+
+	if len(aux.Seconds) > 0 {
+		var secondsInt int
+		if err := common.Unmarshal(aux.Seconds, &secondsInt); err == nil {
+			t.Seconds = strconv.Itoa(secondsInt)
+		} else {
+			var secondsStr string
+			if err := common.Unmarshal(aux.Seconds, &secondsStr); err == nil {
+				t.Seconds = secondsStr
 			}
 		}
 	}

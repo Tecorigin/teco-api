@@ -176,6 +176,7 @@ func handleCozeEvent(c *gin.Context, event string, data string, responseText *st
 			common.SysLog("error_unmarshalling_stream_response: " + err.Error())
 			return
 		}
+		info.SetFirstResponseTime()
 
 		var content string
 		err = json.Unmarshal(messageData.Content, &content)

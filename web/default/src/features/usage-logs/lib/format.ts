@@ -234,7 +234,7 @@ export interface TieredBillingSummary {
     field: string
     shortLabel: string
     price: number
-    priceUnit?: 'per-million-tokens' | 'per-second' | 'per-image'
+    priceUnit?: 'per-million-tokens' | 'per-ten-thousand-characters' | 'per-second' | 'per-image'
   }>
 }
 

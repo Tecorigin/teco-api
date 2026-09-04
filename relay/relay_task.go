@@ -167,7 +167,7 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		if seconds == 0 {
 			seconds, _ = strconv.Atoi(taskRequest.Seconds)
 		}
-		info.VideoGenerationSeconds = seconds
+		info.VideoGenerationSeconds = float64(seconds)
 	}
 
 	// 2. 确定模型名称
@@ -271,8 +271,20 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 
 	// 11. 提交后计费调整：让适配器根据上游实际返回调整 OtherRatios
 	finalQuota := info.PriceData.Quota
-	if !usesTieredExpr {
-		if adjustedRatios := adaptor.AdjustBillingOnSubmit(info, taskData); len(adjustedRatios) > 0 {
+	if adjustedRatios := adaptor.AdjustBillingOnSubmit(info, taskData); len(adjustedRatios) > 0 {
+		if usesTieredExpr {
+			if actualSeconds, ok := adjustedRatios["seconds"]; ok && actualSeconds > 0 {
+				info.VideoGenerationSeconds = actualSeconds
+				adjustedPriceData, priceErr := helper.ModelPriceHelper(c, info, 0, &types.TokenCountMeta{})
+				if priceErr != nil {
+					common.SysError(fmt.Sprintf("recalculate tiered video billing failed: %v", priceErr))
+				} else {
+					finalQuota = adjustedPriceData.QuotaToPreConsume
+					adjustedPriceData.Quota = finalQuota
+					info.PriceData = adjustedPriceData
+				}
+			}
+		} else {
 			if adjustedQuota, ok := recalcQuotaFromRatios(info, adjustedRatios); ok {
 				// 基于调整后的 ratios 重新计算 quota
 				finalQuota = adjustedQuota

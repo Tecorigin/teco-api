@@ -265,7 +265,8 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 		Len:  float64(promptTokens),
 		ASRS: info.ASRInputSeconds * 1_000_000,
 		ImgN: float64(info.ImageGenerationCount) * 1_000_000,
-		VidS: float64(info.VideoGenerationSeconds) * 1_000_000,
+		VidS: info.VideoGenerationSeconds * 1_000_000,
+		TTSC: float64(info.TTSInputCharacters) * 100,
 	}, requestInput)
 	if err != nil {
 		return types.PriceData{}, fmt.Errorf("model %s tiered expr run failed: %w", info.OriginModelName, err)

@@ -104,6 +104,10 @@ export function SidebarModulesSection({
         title: t('Speech Recognition'),
         description: t('Transcribe uploaded audio with supported models.'),
       },
+      speech_synthesis: {
+        title: t('Speech Synthesis'),
+        description: t('Generate audio from text with supported models.'),
+      },
       chat: {
         title: t('Model Chat'),
         description: t('Access previous conversations and start new ones.'),

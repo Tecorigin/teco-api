@@ -70,6 +70,7 @@ export type ModelSLOMetric = {
   p99_latency_ms: number
   p99_ttft_ms: number
   p99_tpot_ms: number
+  tpot_sample_count: number
   slo: number
 }
 

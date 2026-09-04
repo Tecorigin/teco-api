@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -127,6 +128,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 	if imageRequest, ok := request.(*dto.ImageRequest); ok && imageRequest.N != nil {
 		relayInfo.ImageGenerationCount = *imageRequest.N
+	}
+	if audioRequest, ok := request.(*dto.AudioRequest); ok && relayInfo.RelayMode == relayconstant.RelayModeAudioSpeech {
+		relayInfo.TTSInputCharacters = utf8.RuneCountInString(audioRequest.Input)
 	}
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
@@ -324,8 +328,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		logger.LogInfo(c, retryLogStr)
 	}
 	if newAPIError != nil {
+		perfSample := perfmetrics.BuildRelaySample(relayInfo, false, 0)
 		gopool.Go(func() {
-			perfmetrics.RecordRelaySample(relayInfo, false, 0)
+			perfmetrics.Record(perfSample)
 		})
 	}
 }

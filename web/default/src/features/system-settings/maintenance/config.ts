@@ -60,6 +60,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     image_generation: true,
     video_generation: true,
     speech_recognition: true,
+    speech_synthesis: true,
     chat: true,
   },
   console: {

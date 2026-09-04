@@ -36,6 +36,7 @@ import {
   Users,
   Mic,
   Video,
+  Volume2,
   Wallet,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -77,6 +78,11 @@ export function useSidebarData(): SidebarData {
             title: t('Speech Recognition'),
             url: '/speech-recognition',
             icon: Mic,
+          },
+          {
+            title: t('Speech Synthesis'),
+            url: '/speech-synthesis',
+            icon: Volume2,
           },
           {
             title: t('Chat'),

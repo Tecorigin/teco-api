@@ -344,6 +344,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 
 	adminRejectReason := common.GetContextKeyString(ctx, constant.ContextKeyAdminRejectReason)
 	summary := calculateTextQuotaSummary(ctx, relayInfo, usage)
+	perfSample := perfmetrics.BuildRelaySample(relayInfo, true, int64(summary.CompletionTokens))
 
 	var tieredResult *billingexpr.TieredResult
 	tieredBillingApplied := false
@@ -352,7 +353,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		if snap := relayInfo.TieredBillingSnapshot; snap != nil {
 			tieredUsedVars = billingexpr.UsedVars(snap.ExprString)
 		}
-		tieredOk, tieredQuota, tieredRes := TryTieredSettle(relayInfo, BuildTieredTokenParams(usage, summary.IsClaudeUsageSemantic, tieredUsedVars, relayInfo.ASRInputSeconds, relayInfo.ImageGenerationCount, relayInfo.VideoGenerationSeconds))
+		tieredOk, tieredQuota, tieredRes := TryTieredSettle(relayInfo, BuildTieredTokenParams(usage, summary.IsClaudeUsageSemantic, tieredUsedVars, relayInfo.ASRInputSeconds, relayInfo.ImageGenerationCount, relayInfo.VideoGenerationSeconds, relayInfo.TTSInputCharacters))
 		if tieredOk {
 			tieredBillingApplied = true
 			tieredResult = tieredRes
@@ -502,7 +503,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		Other:            other,
 	})
 	gopool.Go(func() {
-		perfmetrics.RecordRelaySample(relayInfo, true, int64(summary.CompletionTokens))
+		perfmetrics.Record(perfSample)
 	})
 }
 

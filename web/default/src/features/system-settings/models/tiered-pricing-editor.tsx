@@ -622,6 +622,9 @@ function VisualTierCard({
         {variable.key === 'vid_s' && (
           <p className='text-muted-foreground text-xs'>{t('USD per generated video second')}</p>
         )}
+        {variable.priceUnit === 'per-ten-thousand-characters' && (
+          <p className='text-muted-foreground text-xs'>{t('USD per 10,000 input characters')}</p>
+        )}
       </div>
     )
   }
@@ -1384,6 +1387,7 @@ function CostEstimator({ effectiveExpr }: EstimatorProps) {
     asrInputSeconds: 0,
     imageGenerationCount: 0,
     videoGenerationSeconds: 0,
+    speechSynthesisInputCharacters: 0,
   })
 
   const usesExtras = useMemo(

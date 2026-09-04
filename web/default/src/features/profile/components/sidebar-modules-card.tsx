@@ -81,6 +81,11 @@ export function SidebarModulesCard() {
           description: t('Transcribe uploaded audio with supported models'),
         },
         {
+          key: 'speech_synthesis',
+          title: t('Speech Synthesis'),
+          description: t('Generate audio from text with supported models'),
+        },
+        {
           key: 'chat',
           title: t('Model Chat'),
           description: t('Chat session management'),

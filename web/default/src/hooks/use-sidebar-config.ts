@@ -43,6 +43,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     image_generation: true,
     video_generation: true,
     speech_recognition: true,
+    speech_synthesis: true,
     chat: true,
   },
   console: {
@@ -102,6 +103,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/image-generation': { section: 'chat', module: 'image_generation' },
   '/video-generation': { section: 'chat', module: 'video_generation' },
   '/speech-recognition': { section: 'chat', module: 'speech_recognition' },
+  '/speech-synthesis': { section: 'chat', module: 'speech_synthesis' },
   '/dashboard': { section: 'console', module: 'detail' },
   '/dashboard/overview': { section: 'console', module: 'detail' },
   '/dashboard/models': { section: 'console', module: 'detail' },

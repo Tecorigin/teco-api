@@ -42,7 +42,7 @@ export type BillingVar = {
   isBase?: boolean
   isConditionOnly?: boolean
   group?: string
-  priceUnit?: 'per-million-tokens' | 'per-second' | 'per-image'
+  priceUnit?: 'per-million-tokens' | 'per-ten-thousand-characters' | 'per-second' | 'per-image'
   estimatorStateKey?: string
 }
 
@@ -169,6 +169,17 @@ export const BILLING_VARS: BillingVar[] = [
     group: 'media',
     priceUnit: 'per-second',
     estimatorStateKey: 'videoGenerationSeconds',
+  },
+  {
+    key: 'tts_c',
+    field: 'speechSynthesisCharacterPrice',
+    tierField: 'speech_synthesis_character_unit_cost',
+    label: 'Speech synthesis input character price',
+    shortLabel: 'Speech Characters',
+    side: 'input',
+    group: 'media',
+    priceUnit: 'per-ten-thousand-characters',
+    estimatorStateKey: 'speechSynthesisInputCharacters',
   },
 ]
 

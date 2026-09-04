@@ -212,6 +212,8 @@ function buildTypeDetailSegments(
             ? '/s'
             : entry.priceUnit === 'per-image'
               ? '/image'
+               : entry.priceUnit === 'per-ten-thousand-characters'
+                 ? '/10k-characters'
               : '/M'
           return `${t(entry.shortLabel)} ${formatPriceCompact(entry.price)}${unit}`
         })

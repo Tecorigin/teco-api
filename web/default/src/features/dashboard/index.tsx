@@ -370,11 +370,13 @@ export function Dashboard() {
                   </Suspense>
                 </FadeIn>
               )}
-              <FadeIn delay={0.08}>
-                <Suspense fallback={<PerformanceOverviewFallback />}>
-                  <LazyModelPerformanceStatistics filters={modelFilters} />
-                </Suspense>
-              </FadeIn>
+              {isAdmin && (
+                <FadeIn delay={0.08}>
+                  <Suspense fallback={<PerformanceOverviewFallback />}>
+                    <LazyModelPerformanceStatistics filters={modelFilters} />
+                  </Suspense>
+                </FadeIn>
+              )}
               <FadeIn delay={0.1}>
                 <Suspense fallback={<ModelChartsFallback />}>
                   <LazyConsumptionDistributionChart

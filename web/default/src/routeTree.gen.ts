@@ -43,6 +43,7 @@ import { Route as AuthenticatedUsageLogsIndexRouteImport } from './routes/_authe
 import { Route as AuthenticatedSystemSettingsIndexRouteImport } from './routes/_authenticated/system-settings/index'
 import { Route as AuthenticatedSystemInfoIndexRouteImport } from './routes/_authenticated/system-info/index'
 import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_authenticated/subscriptions/index'
+import { Route as AuthenticatedSpeechSynthesisIndexRouteImport } from './routes/_authenticated/speech-synthesis/index'
 import { Route as AuthenticatedSpeechRecognitionIndexRouteImport } from './routes/_authenticated/speech-recognition/index'
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
@@ -248,6 +249,12 @@ const AuthenticatedSubscriptionsIndexRoute =
   AuthenticatedSubscriptionsIndexRouteImport.update({
     id: '/subscriptions/',
     path: '/subscriptions/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSpeechSynthesisIndexRoute =
+  AuthenticatedSpeechSynthesisIndexRouteImport.update({
+    id: '/speech-synthesis/',
+    path: '/speech-synthesis/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedSpeechRecognitionIndexRoute =
@@ -475,6 +482,7 @@ export interface FileRoutesByFullPath {
   '/profile/': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/speech-recognition/': typeof AuthenticatedSpeechRecognitionIndexRoute
+  '/speech-synthesis/': typeof AuthenticatedSpeechSynthesisIndexRoute
   '/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
@@ -539,6 +547,7 @@ export interface FileRoutesByTo {
   '/profile': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
   '/speech-recognition': typeof AuthenticatedSpeechRecognitionIndexRoute
+  '/speech-synthesis': typeof AuthenticatedSpeechSynthesisIndexRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings': typeof AuthenticatedSystemSettingsIndexRoute
@@ -607,6 +616,7 @@ export interface FileRoutesById {
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/_authenticated/speech-recognition/': typeof AuthenticatedSpeechRecognitionIndexRoute
+  '/_authenticated/speech-synthesis/': typeof AuthenticatedSpeechSynthesisIndexRoute
   '/_authenticated/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/_authenticated/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/_authenticated/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
@@ -674,6 +684,7 @@ export interface FileRouteTypes {
     | '/profile/'
     | '/redemption-codes/'
     | '/speech-recognition/'
+    | '/speech-synthesis/'
     | '/subscriptions/'
     | '/system-info/'
     | '/system-settings/'
@@ -738,6 +749,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/redemption-codes'
     | '/speech-recognition'
+    | '/speech-synthesis'
     | '/subscriptions'
     | '/system-info'
     | '/system-settings'
@@ -805,6 +817,7 @@ export interface FileRouteTypes {
     | '/_authenticated/profile/'
     | '/_authenticated/redemption-codes/'
     | '/_authenticated/speech-recognition/'
+    | '/_authenticated/speech-synthesis/'
     | '/_authenticated/subscriptions/'
     | '/_authenticated/system-info/'
     | '/_authenticated/system-settings/'
@@ -1089,6 +1102,13 @@ declare module '@tanstack/react-router' {
       path: '/subscriptions'
       fullPath: '/subscriptions/'
       preLoaderRoute: typeof AuthenticatedSubscriptionsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/speech-synthesis/': {
+      id: '/_authenticated/speech-synthesis/'
+      path: '/speech-synthesis'
+      fullPath: '/speech-synthesis/'
+      preLoaderRoute: typeof AuthenticatedSpeechSynthesisIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/speech-recognition/': {
@@ -1412,6 +1432,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
   AuthenticatedSpeechRecognitionIndexRoute: typeof AuthenticatedSpeechRecognitionIndexRoute
+  AuthenticatedSpeechSynthesisIndexRoute: typeof AuthenticatedSpeechSynthesisIndexRoute
   AuthenticatedSubscriptionsIndexRoute: typeof AuthenticatedSubscriptionsIndexRoute
   AuthenticatedSystemInfoIndexRoute: typeof AuthenticatedSystemInfoIndexRoute
   AuthenticatedUsageLogsIndexRoute: typeof AuthenticatedUsageLogsIndexRoute
@@ -1444,6 +1465,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedRedemptionCodesIndexRoute,
   AuthenticatedSpeechRecognitionIndexRoute:
     AuthenticatedSpeechRecognitionIndexRoute,
+  AuthenticatedSpeechSynthesisIndexRoute:
+    AuthenticatedSpeechSynthesisIndexRoute,
   AuthenticatedSubscriptionsIndexRoute: AuthenticatedSubscriptionsIndexRoute,
   AuthenticatedSystemInfoIndexRoute: AuthenticatedSystemInfoIndexRoute,
   AuthenticatedUsageLogsIndexRoute: AuthenticatedUsageLogsIndexRoute,

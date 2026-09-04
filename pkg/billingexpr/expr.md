@@ -40,6 +40,7 @@ Powered by [expr-lang/expr](https://github.com/expr-lang/expr). Expressions are 
 | `asr_s` | ASR `input_audio` 时长（秒）。表达式运行时内部按 $10^6$ 倍缩放，使系数为美元/秒 |
 | `img_n` | 图片生成张数。表达式运行时内部按 $10^6$ 倍缩放，使系数为美元/张 |
 | `vid_s` | 视频生成秒数。表达式运行时内部按 $10^6$ 倍缩放，使系数为美元/秒 |
+| `tts_c` | 语音合成 `input` 的 UTF-8 字符数。表达式运行时内部按 $100$ 倍缩放，使系数为每万字符美元 |
 
 **输出侧变量：**
 
@@ -115,6 +116,9 @@ tier("asr", p * 0.5 + c * 2 + asr_s * 0.02)
 
 # Image generation at $0.03 per image and video generation at $0.02 per second
 tier("media", img_n * 0.03 + vid_s * 0.02)
+
+# Speech synthesis at $10 per 10,000 input characters
+tier("tts", tts_c * 10)
 ```
 
 `asr_s` only applies to `input_audio` content parts. The gateway parses the
@@ -125,6 +129,9 @@ audio-token variable: `asr_s * 0.02` means $0.02 per second.
 `img_n` reads the validated OpenAI Images `n` parameter (default 1), while
 `vid_s` reads the validated video task `seconds` parameter. They are independent
 of `img_o`, which remains the upstream-reported image output **token** count.
+
+`tts_c` applies only to `/v1/audio/speech`. The gateway counts the request's
+UTF-8 characters before pre-consume and reuses that frozen count at settlement.
 
 ### Request Rules (appended after `|||`)
 

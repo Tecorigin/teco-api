@@ -280,13 +280,14 @@ func CalcOpenRouterCacheCreateTokens(usage dto.Usage, priceData types.PriceData)
 }
 
 func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage, extraContent string) {
+	perfSample := perfmetrics.BuildRelaySample(relayInfo, true, int64(usage.CompletionTokens))
 
 	var tieredUsedVars map[string]bool
 	if snap := relayInfo.TieredBillingSnapshot; snap != nil {
 		tieredUsedVars = billingexpr.UsedVars(snap.ExprString)
 	}
 	var tieredResult *billingexpr.TieredResult
-	tieredOk, tieredQuota, tieredRes := TryTieredSettle(relayInfo, BuildTieredTokenParams(usage, false, tieredUsedVars, relayInfo.ASRInputSeconds, relayInfo.ImageGenerationCount, relayInfo.VideoGenerationSeconds))
+	tieredOk, tieredQuota, tieredRes := TryTieredSettle(relayInfo, BuildTieredTokenParams(usage, false, tieredUsedVars, relayInfo.ASRInputSeconds, relayInfo.ImageGenerationCount, relayInfo.VideoGenerationSeconds, relayInfo.TTSInputCharacters))
 	if tieredOk {
 		tieredResult = tieredRes
 	}
@@ -380,7 +381,7 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 		Other:            other,
 	})
 	gopool.Go(func() {
-		perfmetrics.RecordRelaySample(relayInfo, true, int64(usage.CompletionTokens))
+		perfmetrics.Record(perfSample)
 	})
 }
 

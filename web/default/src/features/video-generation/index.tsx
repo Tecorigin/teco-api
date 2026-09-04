@@ -100,6 +100,20 @@ function getVideoUrlCandidate(item?: {
   return item?.url || item?.download_url || item?.result_url || ''
 }
 
+function getVideoBase64Url(base64?: string) {
+  if (!base64) {
+    return ''
+  }
+
+  try {
+    const binary = atob(base64.replace(/^data:video\/[^;]+;base64,/, ''))
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    return URL.createObjectURL(new Blob([bytes], { type: 'video/mp4' }))
+  } catch {
+    return ''
+  }
+}
+
 function extractVideosFromResponse(
   response?: VideoGenerationResponse | VideoGenerationTaskLogItem | null,
   elapsed?: string
@@ -111,6 +125,12 @@ function extractVideosFromResponse(
       const videoUrl = getVideoUrlCandidate(item)
       if (videoUrl) {
         videos.push({ src: videoUrl, elapsed })
+        continue
+      }
+
+      const base64Url = getVideoBase64Url(item.b64_json)
+      if (base64Url) {
+        videos.push({ src: base64Url, elapsed, isBase64: true })
       }
     }
   }
@@ -156,16 +176,6 @@ function isTaskFailed(status?: string) {
   return normalized === 'failed' || normalized === 'failure'
 }
 
-function isInvalidSizeSeparatorError(error: unknown) {
-  const err = error as {
-    response?: { data?: { code?: string; message?: string } }
-    message?: string
-  }
-  const code = err?.response?.data?.code || ''
-  const message = err?.response?.data?.message || err?.message || ''
-  return code === 'build_request_failed' && /invalid size/i.test(message)
-}
-
 function appendHistoryRecord(request: VideoGenerationRequest, nextVideos: GeneratedVideo[]) {
   useVideoGenerationStore.setState((state) => ({
     history: [
@@ -192,9 +202,8 @@ export function VideoGenerationPlayground() {
   const [guidanceScale2, setGuidanceScale2] = useState(3.0)
   const [height, setHeight] = useState(160)
   const [width, setWidth] = useState(320)
-  const [seconds, setSeconds] = useState('5')
+  const [seconds, setSeconds] = useState(5)
   const [fps, setFps] = useState(16)
-  const [sizeSeparator, setSizeSeparator] = useState<'x' | '*'>("x")
   const [showAllModels, setShowAllModels] = useState(false)
   const [learnedModels, setLearnedModels] = useState<string[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
@@ -380,9 +389,8 @@ export function VideoGenerationPlayground() {
     return {
       model,
       prompt: prompt.trim(),
-      size: `${Math.min(MAX_VIDEO_WIDTH, Math.max(1, Math.floor(width)))}${sizeSeparator}${Math.min(MAX_VIDEO_HEIGHT, Math.max(1, Math.floor(height)))}`,
-      size_separator: sizeSeparator,
-      seconds: String(Math.max(1, Math.floor(Number(seconds) || 1))),
+      size: `${Math.min(MAX_VIDEO_WIDTH, Math.max(1, Math.floor(width)))}x${Math.min(MAX_VIDEO_HEIGHT, Math.max(1, Math.floor(height)))}`,
+      seconds: Math.max(1, Math.floor(seconds || 1)),
       response_format: 'url',
       num_inference_steps: Math.max(1, Math.floor(steps)),
       seed: Math.floor(seed),
@@ -390,7 +398,7 @@ export function VideoGenerationPlayground() {
       guidance_scale_2: guidanceScale2,
       fps: Math.max(1, Math.floor(fps)),
     }
-  }, [fps, guidanceScale, guidanceScale2, height, model, prompt, seconds, seed, sizeSeparator, steps, width])
+  }, [fps, guidanceScale, guidanceScale2, height, model, prompt, seconds, seed, steps, width])
 
   const handleGenerate = async () => {
     if (!model) {
@@ -417,25 +425,8 @@ export function VideoGenerationPlayground() {
     })
 
     try {
-      let requestPayload = normalizedPayload
-      let response: VideoGenerationResponse
-
-      try {
-        response = await generateVideos(requestPayload)
-      } catch (error: unknown) {
-        if (requestPayload.size_separator === 'x' && isInvalidSizeSeparatorError(error)) {
-          requestPayload = {
-            ...requestPayload,
-            size_separator: '*',
-            size: requestPayload.size.replace('x', '*'),
-          }
-          setSizeSeparator('*')
-          toast.info(t('The current model requires `*` as the size separator. Automatically retried once.'))
-          response = await generateVideos(requestPayload)
-        } else {
-          throw error
-        }
-      }
+      const requestPayload = normalizedPayload
+      const response = await generateVideos(requestPayload)
 
       const nextVideos = extractVideosFromResponse(response, response.elapsed_time)
       const taskId = getTaskId(response)
@@ -598,19 +589,21 @@ export function VideoGenerationPlayground() {
               </div>
             </div>
             <div className='flex items-center gap-3'>
-              <span>{t('Temporary video URL')}</span>
+              {!video.isBase64 && <span>{t('Temporary video URL')}</span>}
               {video.elapsed && <span>{video.elapsed}</span>}
-              <Button
-                type='button'
-                variant='ghost'
-                size='icon'
-                className='h-7 w-7'
-                onClick={() => void handleCopyVideoLink(video)}
-                disabled={video.isExpired}
-              >
-                <Copy className='h-4 w-4' />
-                <span className='sr-only'>{t('Copy video link')}</span>
-              </Button>
+              {!video.isBase64 && (
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='icon'
+                  className='h-7 w-7'
+                  onClick={() => void handleCopyVideoLink(video)}
+                  disabled={video.isExpired}
+                >
+                  <Copy className='h-4 w-4' />
+                  <span className='sr-only'>{t('Copy video link')}</span>
+                </Button>
+              )}
               <Button
                 type='button'
                 variant='ghost'
@@ -723,7 +716,7 @@ export function VideoGenerationPlayground() {
                 <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
                   <div className='space-y-2'>
                     <Label>{t('seconds')}</Label>
-                    <Input type='number' min={1} value={seconds} onChange={(e) => setSeconds(String(e.target.value || '1'))} />
+                    <Input type='number' min={1} value={seconds} onChange={(e) => setSeconds(Number(e.target.value || 1))} />
                   </div>
                   <div className='space-y-2'>
                     <Label>{t('fps')}</Label>
@@ -742,18 +735,6 @@ export function VideoGenerationPlayground() {
                   </div>
                 </div>
 
-                <div className='space-y-2'>
-                  <Label>{t('Size separator')}</Label>
-                  <Select value={sizeSeparator} onValueChange={(value) => setSizeSeparator(value === '*' ? '*' : 'x')}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value='x'>{t('x (e.g. 320x160)')}</SelectItem>
-                      <SelectItem value='*'>{t('* (e.g. 320*160)')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </CollapsibleContent>
             </Collapsible>
 

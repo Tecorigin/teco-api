@@ -264,6 +264,7 @@ const ESTIMATOR_VARS = [
   { var: 'asr_s', stateKey: 'asrInputSeconds' },
   { var: 'img_n', stateKey: 'imageGenerationCount' },
   { var: 'vid_s', stateKey: 'videoGenerationSeconds' },
+  { var: 'tts_c', stateKey: 'speechSynthesisInputCharacters' },
 ] as const
 
 export type ExtraTokenValues = Record<
@@ -310,9 +311,11 @@ export function evalExprLocally(
     }
     for (const field of ESTIMATOR_VARS) {
       const value = extraTokenValues[field.stateKey] || 0
-      env[field.var] = ['asr_s', 'img_n', 'vid_s'].includes(field.var)
-        ? value * 1_000_000
-        : value
+      env[field.var] = field.var === 'tts_c'
+        ? value * 100
+        : ['asr_s', 'img_n', 'vid_s'].includes(field.var)
+          ? value * 1_000_000
+          : value
     }
     const fn = new Function(
       ...Object.keys(env),

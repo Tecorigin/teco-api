@@ -141,6 +141,7 @@ type PerfMetricSample struct {
 	LatencyMs    int64  `json:"latency_ms" gorm:"default:0"`
 	TtftMs       int64  `json:"ttft_ms" gorm:"default:0"`
 	TpotMs       int64  `json:"tpot_ms" gorm:"default:0"`
+	HasTtft      bool   `json:"has_ttft" gorm:"default:false"`
 	OutputTokens int64  `json:"output_tokens" gorm:"default:0"`
 	Success      bool   `json:"success"`
 	CreatedAt    int64  `json:"created_at" gorm:"index:idx_perf_sample_created_at"`
@@ -165,15 +166,16 @@ func DeletePerfMetricSamplesBefore(cutoffTs int64) error {
 }
 
 type ModelSLOStatsRow struct {
-	ModelName    string  `json:"model_name"`
-	RequestCount int64   `json:"request_count"`
-	SuccessCount int64   `json:"success_count"`
-	Rpm          float64 `json:"rpm"`
-	Tpm          float64 `json:"tpm"`
-	P99LatencyMs int64   `json:"p99_latency_ms"`
-	P99TtftMs    int64   `json:"p99_ttft_ms"`
-	P99TpotMs    int64   `json:"p99_tpot_ms"`
-	Slo          float64 `json:"slo"`
+	ModelName       string  `json:"model_name"`
+	RequestCount    int64   `json:"request_count"`
+	SuccessCount    int64   `json:"success_count"`
+	Rpm             float64 `json:"rpm"`
+	Tpm             float64 `json:"tpm"`
+	P99LatencyMs    int64   `json:"p99_latency_ms"`
+	P99TtftMs       int64   `json:"p99_ttft_ms"`
+	P99TpotMs       int64   `json:"p99_tpot_ms"`
+	TpotSampleCount int64   `json:"tpot_sample_count"`
+	Slo             float64 `json:"slo"`
 }
 
 func GetModelSLOStats(startTs int64, endTs int64, modelName string, groups []string, sloTtftThresholdMs int64, sloTpotThresholdMs int64) ([]ModelSLOStatsRow, error) {
@@ -225,7 +227,9 @@ func GetModelSLOStats(startTs int64, endTs int64, modelName string, groups []str
 		current.outputTokens += sample.OutputTokens
 		current.latencies = append(current.latencies, sample.LatencyMs)
 		current.ttfts = append(current.ttfts, sample.TtftMs)
-		current.tpots = append(current.tpots, sample.TpotMs)
+		if sample.Success && sample.HasTtft && sample.OutputTokens >= 2 && sample.TpotMs > 0 {
+			current.tpots = append(current.tpots, sample.TpotMs)
+		}
 		current.bucketRpm[sample.BucketTs]++
 		current.bucketTpm[sample.BucketTs] += sample.OutputTokens
 		// SLO = success AND TTFT <= thresholdA AND TPOT <= thresholdB
@@ -239,15 +243,16 @@ func GetModelSLOStats(startTs int64, endTs int64, modelName string, groups []str
 		peakRPM := peakBucketValue(current.bucketRpm)
 		peakTPM := peakBucketValue(current.bucketTpm)
 		rows = append(rows, ModelSLOStatsRow{
-			ModelName:    name,
-			RequestCount: current.requestCount,
-			SuccessCount: current.successCount,
-			Rpm:          float64(peakRPM),
-			Tpm:          float64(peakTPM),
-			P99LatencyMs: percentileInt64(current.latencies, 0.99),
-			P99TtftMs:    percentileInt64(current.ttfts, 0.99),
-			P99TpotMs:    percentileInt64(current.tpots, 0.99),
-			Slo:          percent(current.sloHits, current.requestCount),
+			ModelName:       name,
+			RequestCount:    current.requestCount,
+			SuccessCount:    current.successCount,
+			Rpm:             float64(peakRPM),
+			Tpm:             float64(peakTPM),
+			P99LatencyMs:    percentileInt64(current.latencies, 0.99),
+			P99TtftMs:       percentileInt64(current.ttfts, 0.99),
+			P99TpotMs:       percentileInt64(current.tpots, 0.99),
+			TpotSampleCount: int64(len(current.tpots)),
+			Slo:             percent(current.sloHits, current.requestCount),
 		})
 	}
 

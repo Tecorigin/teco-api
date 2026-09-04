@@ -44,6 +44,27 @@ func TestSettleTestQuotaUsesTieredBilling(t *testing.T) {
 	require.Equal(t, "stream", result.MatchedTier)
 }
 
+func TestSettleTestQuotaUsesSpeechSynthesisCharacters(t *testing.T) {
+	info := &relaycommon.RelayInfo{
+		TTSInputCharacters: 10_000,
+		TieredBillingSnapshot: &billingexpr.BillingSnapshot{
+			BillingMode:   "tiered_expr",
+			ExprString:    `tier("tts", tts_c * 10)`,
+			ExprHash:      billingexpr.ExprHashString(`tier("tts", tts_c * 10)`),
+			GroupRatio:    1,
+			EstimatedTier: "tts",
+			QuotaPerUnit:  common.QuotaPerUnit,
+			ExprVersion:   1,
+		},
+	}
+
+	quota, result := settleTestQuota(info, types.PriceData{}, &dto.Usage{})
+
+	require.Equal(t, int(common.QuotaPerUnit*10), quota)
+	require.NotNil(t, result)
+	require.Equal(t, "tts", result.MatchedTier)
+}
+
 func TestBuildTestLogOtherInjectsTieredInfo(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())

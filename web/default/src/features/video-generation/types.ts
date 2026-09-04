@@ -7,8 +7,7 @@ export interface VideoGenerationRequest {
   model: string
   prompt: string
   size: string
-  size_separator?: 'x' | '*'
-  seconds: string
+  seconds: number
   response_format: 'url'
   num_inference_steps: number
   seed: number
@@ -20,6 +19,7 @@ export interface VideoGenerationRequest {
 export interface VideoGenerationItem {
   url?: string
   download_url?: string
+  b64_json?: string
 }
 
 export interface VideoGenerationTaskLogItem {
@@ -71,6 +71,7 @@ export interface PersistedGeneratedVideo {
   src: string
   elapsed?: string
   isExpired?: boolean
+  isBase64?: boolean
 }
 
 export interface VideoGenerationHistoryItem {

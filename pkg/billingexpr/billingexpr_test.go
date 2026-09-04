@@ -920,6 +920,17 @@ func TestImageCountAndVideoSecondsVariables(t *testing.T) {
 	}
 }
 
+func TestSpeechSynthesisCharactersVariable(t *testing.T) {
+	exprStr := `tier("tts", tts_c * 10)`
+	cost, _, err := billingexpr.RunExpr(exprStr, billingexpr.TokenParams{TTSC: 10_000 * 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(cost-10_000_000) > 1e-6 {
+		t.Errorf("cost = %f, want 10000000", cost)
+	}
+}
+
 func TestImageAudioVariables(t *testing.T) {
 	exprStr := `tier("base", p * 1 + img * 3 + ai * 5 + ao * 10)`
 	cost, _, err := billingexpr.RunExpr(exprStr, billingexpr.TokenParams{P: 100, Img: 50, AI: 20, AO: 10})

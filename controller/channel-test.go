@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -205,6 +206,8 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			relayFormat = types.RelayFormatEmbedding
 		case constant.EndpointTypeOpenAIVideo:
 			relayFormat = types.RelayFormatTask
+		case constant.EndpointTypeOpenAISpeech:
+			relayFormat = types.RelayFormatOpenAIAudio
 		default:
 			relayFormat = types.RelayFormatOpenAI
 		}
@@ -267,6 +270,9 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 
 	info.IsChannelTest = true
 	info.InitChannelMeta(c)
+	if audioRequest, ok := request.(*dto.AudioRequest); ok && info.RelayMode == relayconstant.RelayModeAudioSpeech {
+		info.TTSInputCharacters = utf8.RuneCountInString(audioRequest.Input)
+	}
 
 	err = attachTestBillingRequestInput(info, request)
 	if err != nil {
@@ -425,6 +431,16 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 					newAPIError: types.NewError(errors.New("invalid response compaction request type"), types.ErrorCodeConvertRequestFailed),
 				}
 			}
+		case relayconstant.RelayModeAudioSpeech, relayconstant.RelayModeAudioTranscription, relayconstant.RelayModeAudioTranslation:
+			if audioReq, ok := request.(*dto.AudioRequest); ok {
+				convertedRequest, err = adaptor.ConvertAudioRequest(c, info, *audioReq)
+			} else {
+				return testResult{
+					context:     c,
+					localErr:    errors.New("invalid audio request type"),
+					newAPIError: types.NewError(errors.New("invalid audio request type"), types.ErrorCodeConvertRequestFailed),
+				}
+			}
 		default:
 			// Chat/Completion 等其他请求类型
 			if generalReq, ok := request.(*dto.GeneralOpenAIRequest); ok {
@@ -439,7 +455,8 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		}
 
 	}
-	if relayFormat != types.RelayFormatTask {
+	if relayFormat != types.RelayFormatTask && info.RelayMode != relayconstant.RelayModeAudioSpeech &&
+		info.RelayMode != relayconstant.RelayModeAudioTranscription && info.RelayMode != relayconstant.RelayModeAudioTranslation {
 		if err != nil {
 			return testResult{
 				context:     c,
@@ -453,6 +470,25 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 				context:     c,
 				localErr:    err,
 				newAPIError: types.NewError(err, types.ErrorCodeJsonMarshalFailed),
+			}
+		}
+	}
+	if info.RelayMode == relayconstant.RelayModeAudioSpeech ||
+		info.RelayMode == relayconstant.RelayModeAudioTranscription || info.RelayMode == relayconstant.RelayModeAudioTranslation {
+		if err != nil {
+			return testResult{
+				context:     c,
+				localErr:    err,
+				newAPIError: types.NewError(err, types.ErrorCodeConvertRequestFailed),
+			}
+		}
+		var readErr error
+		jsonData, readErr = io.ReadAll(convertedRequest.(io.Reader))
+		if readErr != nil {
+			return testResult{
+				context:     c,
+				localErr:    readErr,
+				newAPIError: types.NewError(readErr, types.ErrorCodeReadRequestBodyFailed),
 			}
 		}
 	}
@@ -593,7 +629,7 @@ func settleTestQuota(info *relaycommon.RelayInfo, priceData types.PriceData, usa
 	if usage != nil && info != nil && info.TieredBillingSnapshot != nil {
 		isClaudeUsageSemantic := usage.UsageSemantic == "anthropic" || info.GetFinalRequestRelayFormat() == types.RelayFormatClaude
 		usedVars := billingexpr.UsedVars(info.TieredBillingSnapshot.ExprString)
-		if ok, quota, result := service.TryTieredSettle(info, service.BuildTieredTokenParams(usage, isClaudeUsageSemantic, usedVars, info.ASRInputSeconds, info.ImageGenerationCount, info.VideoGenerationSeconds)); ok {
+		if ok, quota, result := service.TryTieredSettle(info, service.BuildTieredTokenParams(usage, isClaudeUsageSemantic, usedVars, info.ASRInputSeconds, info.ImageGenerationCount, info.VideoGenerationSeconds, info.TTSInputCharacters)); ok {
 			return quota, result
 		}
 	}
@@ -751,11 +787,17 @@ func detectErrorMessageFromJSONBytes(jsonBytes []byte) string {
 }
 
 // channelTestVideoRequest is used only for channel test payload generation.
-// Keep duration as string to support providers requiring literal values like "5s"/"10s".
 type channelTestVideoRequest struct {
-	Model    string `json:"model,omitempty"`
-	Prompt   string `json:"prompt,omitempty"`
-	Duration string `json:"duration"`
+	Model             string  `json:"model,omitempty"`
+	Prompt            string  `json:"prompt,omitempty"`
+	Size              string  `json:"size"`
+	Seconds           int     `json:"seconds"`
+	ResponseFormat    string  `json:"response_format"`
+	NumInferenceSteps int     `json:"num_inference_steps"`
+	Seed              int     `json:"seed"`
+	GuidanceScale     float64 `json:"guidance_scale"`
+	GuidanceScale2    float64 `json:"guidance_scale_2"`
+	FPS               int     `json:"fps"`
 }
 
 func (r *channelTestVideoRequest) GetTokenCountMeta() *types.TokenCountMeta {
@@ -813,9 +855,24 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 			}
 		case constant.EndpointTypeOpenAIVideo:
 			return &channelTestVideoRequest{
-				Model:    model,
-				Prompt:   "a cute cat is walking in the snow",
-				Duration: "5s",
+				Model:             model,
+				Prompt:            "a cute cat is walking in the snow",
+				Size:              "320x160",
+				Seconds:           2,
+				ResponseFormat:    "url",
+				NumInferenceSteps: 5,
+				Seed:              42,
+				GuidanceScale:     7.5,
+				GuidanceScale2:    3.0,
+				FPS:               16,
+			}
+		case constant.EndpointTypeOpenAISpeech:
+			return &dto.AudioRequest{
+				Model:          model,
+				Input:          "hello world",
+				Voice:          "default",
+				ResponseFormat: "wav",
+				Speed:          lo.ToPtr(1.0),
 			}
 		case constant.EndpointTypeAnthropic, constant.EndpointTypeGemini, constant.EndpointTypeOpenAI:
 			// 返回 GeneralOpenAIRequest

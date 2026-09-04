@@ -24,6 +24,10 @@ func PlaygroundVideoGeneration(c *gin.Context) {
 	playgroundRelay(c, types.RelayFormatTask)
 }
 
+func PlaygroundSpeechSynthesis(c *gin.Context) {
+	playgroundRelay(c, types.RelayFormatOpenAIAudio)
+}
+
 func playgroundRelay(c *gin.Context, relayFormat types.RelayFormat) {
 	var newAPIError *types.NewAPIError
 

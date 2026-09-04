@@ -74,6 +74,13 @@ func SetRelayRouter(router *gin.Engine) {
 	{
 		playgroundImageRouter.POST("/images/generations", controller.PlaygroundImageGeneration)
 	}
+	playgroundAudioRouter := router.Group("/pg")
+	playgroundAudioRouter.Use(middleware.RouteTag("relay"))
+	playgroundAudioRouter.Use(middleware.SystemPerformanceCheck())
+	playgroundAudioRouter.Use(middleware.UserAuth(), middleware.Distribute())
+	{
+		playgroundAudioRouter.POST("/audio/speech", controller.PlaygroundSpeechSynthesis)
+	}
 	playgroundVideoRouter := router.Group("/pg")
 	playgroundVideoRouter.Use(middleware.RouteTag("relay"))
 	playgroundVideoRouter.Use(middleware.SystemPerformanceCheck())

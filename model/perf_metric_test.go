@@ -12,10 +12,10 @@ func TestGetModelSLOStatsComputesPercentilesAndFilter(t *testing.T) {
 	require.NoError(t, DB.Exec("DELETE FROM perf_metric_samples").Error)
 
 	samples := []*PerfMetricSample{
-		{ModelName: "gpt-4o", Group: "default", BucketTs: 100, LatencyMs: 100, TtftMs: 100, TpotMs: 10, OutputTokens: 50, Success: true, CreatedAt: 100},
-		{ModelName: "gpt-4o", Group: "default", BucketTs: 101, LatencyMs: 200, TtftMs: 200, TpotMs: 20, OutputTokens: 60, Success: true, CreatedAt: 101},
-		{ModelName: "gpt-4o", Group: "default", BucketTs: 102, LatencyMs: 300, TtftMs: 300, TpotMs: 30, OutputTokens: 70, Success: false, CreatedAt: 102},
-		{ModelName: "gpt-4o", Group: "default", BucketTs: 103, LatencyMs: 900, TtftMs: 900, TpotMs: 90, OutputTokens: 80, Success: true, CreatedAt: 103},
+		{ModelName: "gpt-4o", Group: "default", BucketTs: 100, LatencyMs: 100, TtftMs: 100, TpotMs: 10, HasTtft: true, OutputTokens: 50, Success: true, CreatedAt: 100},
+		{ModelName: "gpt-4o", Group: "default", BucketTs: 101, LatencyMs: 200, TtftMs: 200, TpotMs: 20, HasTtft: true, OutputTokens: 60, Success: true, CreatedAt: 101},
+		{ModelName: "gpt-4o", Group: "default", BucketTs: 102, LatencyMs: 300, TtftMs: 300, TpotMs: 3000, HasTtft: true, OutputTokens: 70, Success: false, CreatedAt: 102},
+		{ModelName: "gpt-4o", Group: "default", BucketTs: 103, LatencyMs: 900, TtftMs: 900, TpotMs: 3000, HasTtft: false, OutputTokens: 80, Success: true, CreatedAt: 103},
 		{ModelName: "claude-3-5-sonnet", Group: "default", BucketTs: 104, LatencyMs: 150, TtftMs: 150, TpotMs: 15, OutputTokens: 30, Success: true, CreatedAt: 104},
 	}
 	for _, sample := range samples {
@@ -39,7 +39,8 @@ func TestGetModelSLOStatsComputesPercentilesAndFilter(t *testing.T) {
 	assert.Equal(t, int64(3), row.SuccessCount)
 	assert.Equal(t, int64(900), row.P99LatencyMs)
 	assert.Equal(t, int64(900), row.P99TtftMs)
-	assert.Equal(t, int64(90), row.P99TpotMs)
+	assert.Equal(t, int64(20), row.P99TpotMs)
+	assert.Equal(t, int64(2), row.TpotSampleCount)
 	assert.Equal(t, 50.00, row.Slo)
 	assert.InDelta(t, 1.0, row.Rpm, 0.01)
 	assert.InDelta(t, 80.0, row.Tpm, 0.01)

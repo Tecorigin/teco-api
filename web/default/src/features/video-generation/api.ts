@@ -50,7 +50,7 @@ export async function getUserModels(includeAll = false): Promise<ModelOption[]> 
 export async function generateVideos(
   payload: VideoGenerationRequest
 ): Promise<VideoGenerationResponse> {
-  const res = await api.post('/pg/videos', payload, {
+  const res = await api.post('/pg/videos/generations', payload, {
     skipErrorHandler: true,
   } as Record<string, unknown>)
   return res.data

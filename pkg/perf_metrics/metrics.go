@@ -24,9 +24,9 @@ func Init() {
 	go flushLoop()
 }
 
-func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens int64) {
+func BuildRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens int64) Sample {
 	if info == nil {
-		return
+		return Sample{}
 	}
 	now := time.Now()
 	hasTtft := info.IsStream && info.HasSendResponse()
@@ -42,7 +42,7 @@ func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens i
 	if generationMs <= 0 {
 		generationMs = latencyMs
 	}
-	Record(Sample{
+	return Sample{
 		Model:        info.OriginModelName,
 		Group:        info.UsingGroup,
 		LatencyMs:    latencyMs,
@@ -51,7 +51,11 @@ func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens i
 		Success:      success,
 		OutputTokens: outputTokens,
 		GenerationMs: generationMs,
-	})
+	}
+}
+
+func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens int64) {
+	Record(BuildRelaySample(info, success, outputTokens))
 }
 
 func Record(sample Sample) {
@@ -456,6 +460,7 @@ func recordSample(sample Sample, bucketTs int64) {
 		LatencyMs:    sample.LatencyMs,
 		TtftMs:       ttftMs,
 		TpotMs:       tpotMs,
+		HasTtft:      sample.HasTtft,
 		OutputTokens: sample.OutputTokens,
 		Success:      sample.Success,
 		CreatedAt:    time.Now().Unix(),

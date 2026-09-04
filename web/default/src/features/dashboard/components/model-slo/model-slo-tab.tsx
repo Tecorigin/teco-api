@@ -284,7 +284,9 @@ export function ModelSLOTab() {
                     <TableCell className='text-right'>{formatDecimal(row.slo)}%</TableCell>
                     <TableCell className='text-right'>{formatLatency(row.p99_latency_ms)}</TableCell>
                     <TableCell className='text-right'>{formatLatency(row.p99_ttft_ms)}</TableCell>
-                    <TableCell className='text-right'>{formatLatency(row.p99_tpot_ms)}</TableCell>
+                    <TableCell className='text-right'>
+                      {row.tpot_sample_count > 0 ? formatLatency(row.p99_tpot_ms) : '--'}
+                    </TableCell>
                     <TableCell className='text-right'>{formatDecimal(row.rpm)}</TableCell>
                     <TableCell className='text-right'>{formatDecimalWithGrouping(row.tpm)}</TableCell>
                   </TableRow>

@@ -34,6 +34,9 @@ type TokenParams struct {
 	// and USD per second respectively.
 	ImgN float64
 	VidS float64
+	// TTSC is speech-synthesis input character count, scaled by 100 so its
+	// expression coefficient remains an intuitive USD-per-10,000-characters price.
+	TTSC float64
 }
 
 // TraceResult holds side-channel info captured by the tier() function

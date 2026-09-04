@@ -116,6 +116,7 @@ func tencentStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *htt
 			responseText += response.Choices[0].Delta.GetContentString()
 		}
 
+		info.SetFirstResponseTime()
 		err = helper.ObjectData(c, response)
 		if err != nil {
 			common.SysLog(err.Error())

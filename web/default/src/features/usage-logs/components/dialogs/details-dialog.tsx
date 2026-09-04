@@ -216,6 +216,8 @@ function BillingBreakdown(props: {
           ? '/s'
           : entry.priceUnit === 'per-image'
             ? '/image'
+             : entry.priceUnit === 'per-ten-thousand-characters'
+               ? '/10k-characters'
             : '/M'
         rows.push({
           label: t(entry.shortLabel),

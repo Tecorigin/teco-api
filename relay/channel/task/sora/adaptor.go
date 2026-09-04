@@ -2,8 +2,11 @@ package sora
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -13,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay/channel"
 	taskcommon "github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
@@ -69,6 +73,8 @@ type syncVideoResponse struct {
 		DownloadURL string `json:"download_url"`
 	} `json:"data,omitempty"`
 }
+
+const actualVideoSecondsMetadataKey = "actual_video_seconds"
 
 // ============================
 // Adaptor implementation
@@ -139,6 +145,20 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	if size == "1792x1024" || size == "1024x1792" {
 		ratios["size"] = 1.666667
 	}
+	return ratios
+}
+
+func (a *TaskAdaptor) AdjustBillingOnSubmit(info *relaycommon.RelayInfo, taskData []byte) map[string]float64 {
+	actualSeconds := gjson.GetBytes(taskData, "metadata."+actualVideoSecondsMetadataKey).Float()
+	if actualSeconds <= 0 || actualSeconds > float64(relaycommon.MaxTaskDurationSeconds) {
+		return nil
+	}
+
+	ratios := info.PriceData.OtherRatios()
+	if ratios == nil {
+		ratios = map[string]float64{}
+	}
+	ratios["seconds"] = actualSeconds
 	return ratios
 }
 
@@ -245,6 +265,15 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 
 // DoRequest delegates to common helper.
 func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (*http.Response, error) {
+	if strings.HasPrefix(info.RequestURLPath, "/v1/videos/generations") && strings.HasPrefix(c.GetHeader("Content-Type"), "application/json") {
+		if requestBytes, err := io.ReadAll(requestBody); err == nil {
+			requestURL, urlErr := a.BuildRequestURL(info)
+			if urlErr == nil {
+				logger.LogDebug(c, "video generation upstream request: url=%s, body=%s", requestURL, requestBytes)
+			}
+			requestBody = bytes.NewReader(requestBytes)
+		}
+	}
 	return channel.DoTaskApiRequest(a, c, info, requestBody)
 }
 
@@ -496,8 +525,31 @@ func buildCompletedTaskDataForSyncResponse(info *relaycommon.RelayInfo, response
 	if elapsed := strings.TrimSpace(gjson.GetBytes(responseBody, "elapsed_time").String()); elapsed != "" {
 		openAIResp.SetMetadata("elapsed_time", elapsed)
 	}
+	if actualSeconds := getBase64VideoDurationSeconds(responseBody); actualSeconds > 0 {
+		openAIResp.SetMetadata(actualVideoSecondsMetadataKey, actualSeconds)
+	}
 
 	return common.Marshal(openAIResp)
+}
+
+func getBase64VideoDurationSeconds(responseBody []byte) float64 {
+	encodedVideo := strings.TrimSpace(gjson.GetBytes(responseBody, "data.0.b64_json").String())
+	if encodedVideo == "" {
+		return 0
+	}
+	encodedVideo = strings.TrimPrefix(encodedVideo, "data:video/mp4;base64,")
+	videoData, err := base64.StdEncoding.DecodeString(encodedVideo)
+	if err != nil {
+		return 0
+	}
+	duration, err := common.GetAudioDuration(context.Background(), bytes.NewReader(videoData), ".mp4")
+	if err != nil || duration <= 0 || math.IsNaN(duration) || math.IsInf(duration, 0) {
+		return 0
+	}
+	if duration > float64(relaycommon.MaxTaskDurationSeconds) {
+		return float64(relaycommon.MaxTaskDurationSeconds)
+	}
+	return duration
 }
 
 func firstNonEmptyString(values ...string) string {
