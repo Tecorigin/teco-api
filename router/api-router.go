@@ -219,6 +219,15 @@ func SetApiRouter(router *gin.Engine) {
 			userModelUsageLimitRoute.GET("/hits", controller.GetUserModelUsageLimitHits)
 		}
 
+		userRateLimitRoute := apiRouter.Group("/user_rate_limit")
+		userRateLimitRoute.Use(middleware.AdminAuth())
+		{
+			userRateLimitRoute.GET("/", controller.GetUserRateLimits)
+			userRateLimitRoute.POST("/", controller.CreateUserRateLimit)
+			userRateLimitRoute.PUT("/:id", controller.UpdateUserRateLimit)
+			userRateLimitRoute.DELETE("/:id", controller.DeleteUserRateLimit)
+		}
+
 		customOAuthRoute := apiRouter.Group("/custom-oauth-provider")
 		customOAuthRoute.Use(middleware.RootAuth())
 		{

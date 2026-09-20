@@ -126,6 +126,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)
 		return
 	}
+	if relayInfo == nil {
+		newAPIError = types.NewError(errors.New("generated relay info is nil"), types.ErrorCodeGenRelayInfoFailed)
+		return
+	}
 	if imageRequest, ok := request.(*dto.ImageRequest); ok && imageRequest.N != nil {
 		relayInfo.ImageGenerationCount = *imageRequest.N
 	}
@@ -195,6 +199,62 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	relayInfo.SetEstimatePromptTokens(tokens)
 
 	userId := c.GetInt("id")
+	userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+	rateLimit, limitErr := model.GetEffectiveUserRateLimit(userId, userGroup, relayInfo.OriginModelName)
+	if limitErr != nil {
+		newAPIError = types.NewError(limitErr, types.ErrorCodeUpdateDataError)
+		return
+	}
+	if rateLimit != nil {
+		allowed, limitType, reservation, limitErr := model.AllowUserRateLimit(rateLimit, int64(userId), int64(tokens), requestId)
+		if limitErr != nil {
+			newAPIError = types.NewError(limitErr, types.ErrorCodeUpdateDataError)
+			return
+		}
+		if !allowed {
+			// ChannelMeta is initialized only after a channel is selected. Rate
+			// limiting happens before that, so use the context's safe zero value.
+			channelID := common.GetContextKeyInt(c, constant.ContextKeyChannelId)
+			modelName := relayInfo.OriginModelName
+			tokenID := relayInfo.TokenId
+			isStream := relayInfo.IsStream
+			usingGroup := relayInfo.UsingGroup
+			rateLimitScope := rateLimit.Scope
+			rpmLimit := rateLimit.RPM
+			tpmLimit := rateLimit.TPM
+			model.RecordRateLimitBlockedLog(c, userId, model.RecordConsumeLogParams{
+				ChannelId:        channelID,
+				PromptTokens:     0,
+				CompletionTokens: 0,
+				ModelName:        modelName,
+				TokenName:        c.GetString("token_name"),
+				Quota:            0,
+				Content:          strings.ToUpper(limitType) + " 限制，已在本地直接拦截并返回 429",
+				TokenId:          tokenID,
+				UseTimeSeconds:   int(time.Since(relayInfo.StartTime).Seconds()),
+				IsStream:         isStream,
+				Group:            usingGroup,
+				Other: map[string]interface{}{
+					"limit_blocked":    true,
+					"limit_type":       limitType,
+					"rate_limit_scope": rateLimitScope,
+					"rpm_limit":        rpmLimit,
+					"tpm_limit":        tpmLimit,
+					"estimated_tokens": tokens,
+				},
+			})
+			newAPIError = types.NewOpenAIError(
+				errors.New("请求频率或 token 使用量超过限制"),
+				types.ErrorCodeAccessDenied,
+				http.StatusTooManyRequests,
+				types.ErrOptionWithSkipRetry(),
+			)
+			return
+		}
+		if reservation != nil {
+			common.SetContextKey(c, constant.ContextKeyUserRateLimitReservation, reservation)
+		}
+	}
 	if exceeded, limitErr := model.CheckUserModelUsageLimit(userId, relayInfo.OriginModelName, int64(tokens), 1, requestId); limitErr != nil {
 		newAPIError = types.NewError(limitErr, types.ErrorCodeUpdateDataError)
 		return

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/types"
 
@@ -373,6 +374,12 @@ type RecordConsumeLogParams struct {
 }
 
 func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
+	if reservation, ok := common.GetContextKeyType[*UserRateLimitReservation](c, constant.ContextKeyUserRateLimitReservation); ok {
+		actualTokens := int64(params.PromptTokens) + int64(params.CompletionTokens)
+		if err := SettleUserRateLimitReservation(reservation, actualTokens); err != nil {
+			logger.LogError(c, "failed to settle user rate limit: "+err.Error())
+		}
+	}
 	if !common.LogConsumeEnabled {
 		return
 	}
@@ -561,6 +568,17 @@ func RecordConsumeBlockedLog(c *gin.Context, userId int, params RecordConsumeLog
 	if err := createLog(log); err != nil {
 		logger.LogError(c, "failed to record blocked consume log: "+err.Error())
 	}
+}
+
+// RecordRateLimitBlockedLog keeps audit logging failures from changing a rate
+// limit response into a server error.
+func RecordRateLimitBlockedLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logger.LogError(c, fmt.Sprintf("failed to record rate limit blocked log: %v", recovered))
+		}
+	}()
+	RecordConsumeBlockedLog(c, userId, params)
 }
 
 func RecordConsumeLogBatch(logs []*Log) {
