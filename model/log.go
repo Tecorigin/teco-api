@@ -559,28 +559,6 @@ func buildConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) 
 	return log, username, requestId, createdAt, debugParams
 }
 
-func RecordConsumeBlockedLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
-	if !common.LogConsumeEnabled {
-		return
-	}
-	log, _, _, _, debugParams := buildConsumeLog(c, userId, params)
-	logger.LogInfo(c, fmt.Sprintf("record blocked consume log: userId=%d, params=%s", userId, common.MapToJsonStr(debugParams)))
-	if err := createLog(log); err != nil {
-		logger.LogError(c, "failed to record blocked consume log: "+err.Error())
-	}
-}
-
-// RecordRateLimitBlockedLog keeps audit logging failures from changing a rate
-// limit response into a server error.
-func RecordRateLimitBlockedLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			logger.LogError(c, fmt.Sprintf("failed to record rate limit blocked log: %v", recovered))
-		}
-	}()
-	RecordConsumeBlockedLog(c, userId, params)
-}
-
 func RecordConsumeLogBatch(logs []*Log) {
 	if len(logs) == 0 {
 		return

@@ -222,27 +222,16 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			rateLimitScope := rateLimit.Scope
 			rpmLimit := rateLimit.RPM
 			tpmLimit := rateLimit.TPM
-			model.RecordRateLimitBlockedLog(c, userId, model.RecordConsumeLogParams{
-				ChannelId:        channelID,
-				PromptTokens:     0,
-				CompletionTokens: 0,
-				ModelName:        modelName,
-				TokenName:        c.GetString("token_name"),
-				Quota:            0,
-				Content:          strings.ToUpper(limitType) + " 限制，已在本地直接拦截并返回 429",
-				TokenId:          tokenID,
-				UseTimeSeconds:   int(time.Since(relayInfo.StartTime).Seconds()),
-				IsStream:         isStream,
-				Group:            usingGroup,
-				Other: map[string]interface{}{
+			model.RecordErrorLog(c, userId, channelID, modelName, c.GetString("token_name"),
+				strings.ToUpper(limitType)+" 限制，已在本地直接拦截并返回 429", tokenID,
+				int(time.Since(relayInfo.StartTime).Seconds()), isStream, usingGroup, map[string]interface{}{
 					"limit_blocked":    true,
 					"limit_type":       limitType,
 					"rate_limit_scope": rateLimitScope,
 					"rpm_limit":        rpmLimit,
 					"tpm_limit":        tpmLimit,
 					"estimated_tokens": tokens,
-				},
-			})
+				})
 			newAPIError = types.NewOpenAIError(
 				errors.New("请求频率或 token 使用量超过限制"),
 				types.ErrorCodeAccessDenied,
@@ -262,30 +251,15 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		channelId := common.GetContextKeyInt(c, constant.ContextKeyChannelId)
 		tokenId := common.GetContextKeyInt(c, constant.ContextKeyTokenId)
 		usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-		isStream := false
-		if relayInfo != nil {
-			isStream = relayInfo.IsStream
-		}
-		model.RecordConsumeBlockedLog(c, userId, model.RecordConsumeLogParams{
-			ChannelId:        channelId,
-			PromptTokens:     0,
-			CompletionTokens: 0,
-			ModelName:        relayInfo.OriginModelName,
-			TokenName:        "",
-			Quota:            0,
-			Content:          "使用超限，已在本地直接拦截并返回 429",
-			TokenId:          tokenId,
-			UseTimeSeconds:   0,
-			IsStream:         isStream,
-			Group:            usingGroup,
-			Other: map[string]interface{}{
+		model.RecordErrorLog(c, userId, channelId, relayInfo.OriginModelName, c.GetString("token_name"),
+			"模型用量限制，已在本地直接拦截并返回 429", tokenId,
+			int(time.Since(relayInfo.StartTime).Seconds()), relayInfo.IsStream, usingGroup, map[string]interface{}{
 				"limit_blocked": true,
 				"limit_type":    exceeded.LimitType,
 				"period_type":   exceeded.PeriodType,
 				"used_value":    exceeded.UsedValue,
 				"limit_value":   exceeded.LimitValue,
-			},
-		})
+			})
 		newAPIError = types.NewOpenAIError(
 			errors.New("使用超限"),
 			types.ErrorCodeAccessDenied,
