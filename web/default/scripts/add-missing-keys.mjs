@@ -8,6 +8,8 @@ function stableStringify(obj) {
 
 const newKeys = {
     en: {
+        'Request Routing': 'Request Routing',
+        'JSON Configuration': 'JSON Configuration',
         'Model Performance Statistics': 'Model Performance Statistics',
         'Compare model-level latency, throughput, success rate and request volume over the selected time range.': 'Compare model-level latency, throughput, success rate and request volume over the selected time range.',
         'Select model': 'Select model',
@@ -57,6 +59,8 @@ const newKeys = {
         'No rate limits configured': 'No rate limits configured',
     },
     zh: {
+        'Request Routing': '路由规则',
+        'JSON Configuration': 'JSON 配置',
         'Model Performance Statistics': '模型性能统计',
         'Compare model-level latency, throughput, success rate and request volume over the selected time range.': '对比所选时间范围内各模型的延迟、吞吐、成功率与请求量。',
         'Select model': '选择模型',
@@ -155,6 +159,8 @@ const newKeys = {
         'No rate limits configured': '尚未設定速率限制',
     },
     fr: {
+        'Request Routing': 'Routage des requêtes',
+        'JSON Configuration': 'Configuration JSON',
         'Model Performance Statistics': 'Statistiques de performance des modèles',
         'Compare model-level latency, throughput, success rate and request volume over the selected time range.': 'Comparez la latence, le débit, le taux de réussite et le volume de requêtes des modèles sur la période sélectionnée.',
         'Select model': 'Sélectionner un modèle',
@@ -204,6 +210,8 @@ const newKeys = {
         'No rate limits configured': 'Aucune limite configurée',
     },
     ja: {
+        'Request Routing': 'リクエストルーティング',
+        'JSON Configuration': 'JSON 設定',
         'Model Performance Statistics': 'モデル性能統計',
         'Compare model-level latency, throughput, success rate and request volume over the selected time range.': '選択した期間内で、モデルごとのレイテンシ、スループット、成功率、リクエスト数を比較します。',
         'Select model': 'モデルを選択',
@@ -253,6 +261,8 @@ const newKeys = {
         'No rate limits configured': 'レート制限は未設定です',
     },
     ru: {
+        'Request Routing': 'Маршрутизация запросов',
+        'JSON Configuration': 'Конфигурация JSON',
         'Model Performance Statistics': 'Статистика производительности моделей',
         'Compare model-level latency, throughput, success rate and request volume over the selected time range.': 'Сравнивайте задержку, пропускную способность, успешность и объём запросов по моделям за выбранный период.',
         'Select model': 'Выбрать модель',
@@ -302,6 +312,8 @@ const newKeys = {
         'No rate limits configured': 'Лимиты не настроены',
     },
     vi: {
+        'Request Routing': 'Định tuyến yêu cầu',
+        'JSON Configuration': 'Cấu hình JSON',
         'Model Performance Statistics': 'Thống kê hiệu năng mô hình',
         'Compare model-level latency, throughput, success rate and request volume over the selected time range.': 'So sánh độ trễ, thông lượng, tỷ lệ thành công và số lượng yêu cầu của từng mô hình trong khoảng thời gian đã chọn.',
         'Select model': 'Chọn mô hình',
@@ -350,6 +362,41 @@ const newKeys = {
         'Rate limit saved': 'Đã lưu giới hạn',
         'No rate limits configured': 'Chưa cấu hình giới hạn',
     },
+}
+
+const routingLabels = {
+    'Selected channels do not support any selected model': ['Selected channels do not support any selected model', '已选渠道不支持任何所选模型，请重新选择', 'Les canaux sélectionnés ne prennent en charge aucun modèle sélectionné', '選択したチャネルは選択したモデルに対応していません', 'Выбранные каналы не поддерживают выбранные модели', 'Kênh đã chọn không hỗ trợ mô hình đã chọn'],
+    'Rule Name': ['Rule Name', '规则名称', 'Nom de la règle', 'ルール名', 'Название правила', 'Tên quy tắc'],
+    'Selected channels do not support all selected models': ['Selected channels do not support all selected models', '已选渠道不支持全部所选模型，请重新选择', 'Les canaux sélectionnés ne prennent pas en charge tous les modèles', '選択したチャネルはすべてのモデルに対応していません', 'Выбранные каналы поддерживают не все модели', 'Kênh đã chọn không hỗ trợ tất cả mô hình'],
+    'Minimum Input Tokens (inclusive)': ['Minimum Input Tokens (inclusive)', '输入 token 下限（包含）', 'Minimum de tokens d’entrée (inclus)', '入力トークン下限（含む）', 'Минимум входных токенов (включительно)', 'Token đầu vào tối thiểu (bao gồm)'],
+    'Maximum Input Tokens (exclusive)': ['Maximum Input Tokens (exclusive)', '输入 token 上限（不包含）', 'Maximum de tokens d’entrée (exclu)', '入力トークン上限（含まない）', 'Максимум входных токенов (не включительно)', 'Token đầu vào tối đa (không bao gồm)'],
+    'Remove Range': ['Remove Range', '删除区间', 'Supprimer la plage', '範囲を削除', 'Удалить диапазон', 'Xóa khoảng'],
+    'Add Token Range': ['Add Token Range', '添加 token 区间', 'Ajouter une plage de tokens', 'トークン範囲を追加', 'Добавить диапазон токенов', 'Thêm khoảng token'],
+    'Add Instance': ['Add Instance', '添加实例', 'Ajouter une instance', 'インスタンスを追加', 'Добавить экземпляр', 'Thêm phiên bản'],
+    'Remove Instance': ['Remove Instance', '删除实例', 'Supprimer l’instance', 'インスタンスを削除', 'Удалить экземпляр', 'Xóa phiên bản'],
+    'No instances configured': ['No instances configured', '暂无实例', 'Aucune instance configurée', 'インスタンス未設定', 'Нет настроенных экземпляров', 'Chưa cấu hình phiên bản'],
+    'Instance ID': ['Instance ID', '实例标识', 'Identifiant de l’instance', 'インスタンス ID', 'ID экземпляра', 'ID phiên bản'],
+    'Maximum Inflight Requests': ['Maximum Inflight Requests', '最大并发请求数', 'Requêtes simultanées maximales', '最大同時リクエスト数', 'Максимум одновременных запросов', 'Số yêu cầu đồng thời tối đa'],
+    'Work Capacity Units': ['Work Capacity Units', '负载容量单位', 'Unités de capacité de charge', '負荷容量単位', 'Единицы ёмкости нагрузки', 'Đơn vị khả năng tải'],
+    'Rule ID': ['Rule ID', '规则标识', 'Identifiant de règle', 'ルール ID', 'ID правила', 'ID quy tắc'],
+    'Remove Rule': ['Remove Rule', '删除规则', 'Supprimer la règle', 'ルールを削除', 'Удалить правило', 'Xóa quy tắc'],
+    'Request Interfaces': ['Request Interfaces', '请求接口', 'Interfaces de requête', 'リクエスト API', 'Интерфейсы запросов', 'Giao diện yêu cầu'],
+    'Long Request Threshold (tokens)': ['Long Request Threshold (tokens)', '长请求分界（token）', 'Seuil des requêtes longues (tokens)', '長いリクエストの閾値（トークン）', 'Порог длинных запросов (токены)', 'Ngưỡng yêu cầu dài (token)'],
+    'Short Request Pool': ['Short Request Pool', '短请求实例池', 'Pool de requêtes courtes', '短いリクエストのプール', 'Пул коротких запросов', 'Nhóm yêu cầu ngắn'],
+    'Long Request Pool': ['Long Request Pool', '长请求实例池', 'Pool de requêtes longues', '長いリクエストのプール', 'Пул длинных запросов', 'Nhóm yêu cầu dài'],
+    'Input Work Weight': ['Input Work Weight', '输入负载权重', 'Poids de charge en entrée', '入力負荷の重み', 'Вес входной нагрузки', 'Trọng số tải đầu vào'],
+    'Output Work Weight': ['Output Work Weight', '输出负载权重', 'Poids de charge en sortie', '出力負荷の重み', 'Вес выходной нагрузки', 'Trọng số tải đầu ra'],
+    'Default Output Budget': ['Default Output Budget', '默认输出预算', 'Budget de sortie par défaut', '既定の出力予算', 'Бюджет вывода по умолчанию', 'Ngân sách đầu ra mặc định'],
+    'Output Budget Cap': ['Output Budget Cap', '输出预算上限', 'Plafond du budget de sortie', '出力予算の上限', 'Предел бюджета вывода', 'Giới hạn ngân sách đầu ra'],
+    'Invalid routing configuration': ['Invalid routing configuration', '路由配置格式或参数无效', 'Configuration de routage invalide', 'ルーティング設定が無効です', 'Недопустимая конфигурация маршрутизации', 'Cấu hình định tuyến không hợp lệ'],
+    'Capacity State Backend': ['Capacity State Backend', '容量状态存储', 'Stockage de l’état de capacité', '容量状態の保存先', 'Хранилище состояния ёмкости', 'Lưu trữ trạng thái khả năng tải'],
+    'Local (single gateway)': ['Local (single gateway)', '本地（单网关）', 'Local (passerelle unique)', 'ローカル（単一ゲートウェイ）', 'Локально (один шлюз)', 'Cục bộ (một cổng)'],
+    'Failed to load channels': ['Failed to load channels', '渠道加载失败', 'Échec du chargement des canaux', 'チャネルの読み込みに失敗しました', 'Не удалось загрузить каналы', 'Không thể tải kênh'],
+}
+for (const [key, values] of Object.entries(routingLabels)) {
+    for (const [index, locale] of ['en', 'zh', 'fr', 'ja', 'ru', 'vi'].entries()) {
+        newKeys[locale][key] = values[index]
+    }
 }
 
 async function main() {

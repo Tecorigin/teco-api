@@ -24,6 +24,7 @@ import { ClaudeSettingsCard } from './claude-settings-card'
 import { GeminiSettingsCard } from './gemini-settings-card'
 import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
+import { RequestRoutingSection } from './request-routing-section'
 import { RoutingReliabilitySection } from './routing-reliability-section'
 
 function formatJsonForEditor(value: string, fallback: string) {
@@ -37,6 +38,13 @@ function formatJsonForEditor(value: string, fallback: string) {
 }
 
 const MODELS_SECTIONS = [
+  {
+    id: 'request-routing',
+    titleKey: 'Request Routing',
+    build: (settings: ModelSettings) => (
+      <RequestRoutingSection value={settings.RequestRouting ?? ''} />
+    ),
+  },
   {
     id: 'global',
     titleKey: 'Global Model Configuration',

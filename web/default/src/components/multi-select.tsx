@@ -250,6 +250,19 @@ export function MultiSelect(props: MultiSelectProps) {
     <Combobox
       multiple
       items={items}
+      filter={(value, query) => {
+        const search = query.trim().toLocaleLowerCase()
+        const label =
+          `${labelMap.get(value) ?? value} ${value}`.toLocaleLowerCase()
+        if (label.includes(search)) return true
+        let position = 0
+        for (const character of search) {
+          position = label.indexOf(character, position)
+          if (position < 0) return false
+          position++
+        }
+        return true
+      }}
       value={props.selected}
       onValueChange={handleValueChange}
       inputValue={inputValue}

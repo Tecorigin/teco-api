@@ -70,6 +70,7 @@ func geminiRelayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewA
 }
 
 func Relay(c *gin.Context, relayFormat types.RelayFormat) {
+	defer service.ReleaseRoutingAttempt(c)
 
 	requestId := c.GetString(common.RequestIdKey)
 	//group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
@@ -340,6 +341,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		default:
 			newAPIError = relayHandler(c, relayInfo)
 		}
+		service.ReleaseRoutingAttempt(c)
 
 		if newAPIError == nil {
 			relayInfo.LastError = nil
@@ -351,7 +353,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
 
-		if !shouldRetry(c, newAPIError, retryParam.GetRetry()) {
+		if c.Writer.Written() || !shouldRetry(c, newAPIError, retryParam.GetRetry()) {
 			break
 		}
 	}
@@ -430,10 +432,22 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
 
 	if err != nil {
+		var routingErr *service.RoutingError
+		if errors.As(err, &routingErr) {
+			return nil, types.NewErrorWithStatusCode(err, types.ErrorCodeGetChannelFailed, routingErr.Status, types.ErrOptionWithSkipRetry())
+		}
 		return nil, types.NewError(fmt.Errorf("获取分组 %s 下模型 %s 的可用渠道失败（retry）: %s", selectGroup, info.OriginModelName, err.Error()), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 	if channel == nil {
 		return nil, types.NewError(fmt.Errorf("分组 %s 下模型 %s 的可用渠道不存在（retry）", selectGroup, info.OriginModelName), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
+	}
+	if err := service.AcquireManagedRoutingChannel(c, channel.Id); err != nil {
+		status := http.StatusServiceUnavailable
+		var routingErr *service.RoutingError
+		if errors.As(err, &routingErr) {
+			status = routingErr.Status
+		}
+		return nil, types.NewErrorWithStatusCode(err, types.ErrorCodeGetChannelFailed, status, types.ErrOptionWithSkipRetry())
 	}
 
 	newAPIError := middleware.SetupContextForSelectedChannel(c, channel, info.OriginModelName)

@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/system_setting"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 var completionRatioMetaOptionKeys = []string{
@@ -150,6 +151,57 @@ func UpdateOption(c *gin.Context) {
 		}
 	}
 	switch option.Key {
+	case operation_setting.RequestRoutingOption:
+		routing, routingErr := operation_setting.ParseRequestRouting(option.Value.(string))
+		if routingErr != nil {
+			common.ApiError(c, routingErr)
+			return
+		}
+		for _, rule := range routing.Rules {
+			for _, pool := range rule.InstancePools() {
+				for _, instance := range pool {
+					for _, channelID := range instance.ChannelIDs {
+						channel, channelErr := model.GetChannelById(channelID, true)
+						if channelErr != nil || channel == nil {
+							common.ApiErrorMsg(c, fmt.Sprintf("routing channel %d does not exist", channelID))
+							return
+						}
+						if channel.Type == 58 {
+							advanced := channel.GetOtherSettings().AdvancedCustom
+							for _, path := range rule.Paths {
+								if advanced == nil || !advanced.SupportsPath(path) {
+									common.ApiErrorMsg(c, fmt.Sprintf("routing channel %d does not support path %s", channelID, path))
+									return
+								}
+							}
+						}
+						for _, group := range rule.Groups {
+							if group == "auto" {
+								continue
+							}
+							supportsSelectedModel := false
+							for _, name := range rule.Models {
+								if model.IsChannelEnabledForGroupModel(group, name, channelID) {
+									supportsSelectedModel = true
+									break
+								}
+							}
+							if !supportsSelectedModel {
+								common.ApiErrorMsg(c, fmt.Sprintf("routing channel %d does not support any selected model in group %s", channelID, group))
+								return
+							}
+						}
+					}
+				}
+			}
+		}
+		routing.Version = uuid.NewString()
+		encoded, encodeErr := common.Marshal(routing)
+		if encodeErr != nil {
+			common.ApiError(c, encodeErr)
+			return
+		}
+		option.Value = string(encoded)
 	case "GitHubOAuthEnabled":
 		if option.Value == "true" && common.GitHubClientId == "" {
 			c.JSON(http.StatusOK, gin.H{

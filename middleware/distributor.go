@@ -39,6 +39,13 @@ func Distribute() func(c *gin.Context) {
 			abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
 			return
 		}
+		defer service.ReleaseRoutingAttempt(c)
+		if shouldSelectChannel && (ok || !strings.HasPrefix(c.Request.URL.Path, "/pg/")) {
+			if routingErr := service.PrepareRequestRouting(c, modelRequest.Model, common.GetContextKeyString(c, constant.ContextKeyUsingGroup)); routingErr != nil {
+				abortRoutingRequest(c, routingErr)
+				return
+			}
+		}
 		if ok {
 			id, err := strconv.Atoi(channelId.(string))
 			if err != nil {
@@ -53,6 +60,13 @@ func Distribute() func(c *gin.Context) {
 			if channel.Status != common.ChannelStatusEnabled {
 				abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorChannelDisabled))
 				return
+			}
+			if service.RequestRoutingActive(c) {
+				channel, _, err = service.CacheGetRandomSatisfiedChannel(&service.RetryParam{Ctx: c, ModelName: modelRequest.Model, TokenGroup: common.GetContextKeyString(c, constant.ContextKeyUsingGroup), RequestPath: c.Request.URL.Path})
+				if err != nil {
+					abortRoutingRequest(c, err)
+					return
+				}
 			}
 		} else {
 			// Select a channel for the user
@@ -102,7 +116,11 @@ func Distribute() func(c *gin.Context) {
 					}
 				}
 
-				if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
+				if routingErr := service.PrepareRequestRouting(c, modelRequest.Model, usingGroup); routingErr != nil {
+					abortRoutingRequest(c, routingErr)
+					return
+				}
+				if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found && !service.RequestRoutingActive(c) {
 					affinityUsable := false
 					preferred, err := model.CacheGetChannel(preferredChannelID)
 					if err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled &&
@@ -141,6 +159,11 @@ func Distribute() func(c *gin.Context) {
 						Retry:       common.GetPointer(0),
 					})
 					if err != nil {
+						var routingErr *service.RoutingError
+						if errors.As(err, &routingErr) {
+							abortRoutingRequest(c, err)
+							return
+						}
 						showGroup := usingGroup
 						if usingGroup == "auto" {
 							showGroup = fmt.Sprintf("auto(%s)", selectGroup)
@@ -161,13 +184,35 @@ func Distribute() func(c *gin.Context) {
 				}
 			}
 		}
+		if channel != nil {
+			if err := service.AcquireManagedRoutingChannel(c, channel.Id); err != nil {
+				abortRoutingRequest(c, err)
+				return
+			}
+		}
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
-		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
+		if setupErr := SetupContextForSelectedChannel(c, channel, modelRequest.Model); setupErr != nil && channel != nil {
+			abortRoutingRequest(c, setupErr)
+			return
+		}
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {
 			service.RecordChannelAffinity(c, channel.Id)
 		}
 	}
+}
+
+func abortRoutingRequest(c *gin.Context, err error) {
+	status := http.StatusServiceUnavailable
+	var routingErr *service.RoutingError
+	if errors.As(err, &routingErr) {
+		status = routingErr.Status
+	}
+	if c.Request.URL.Path == "/v1/messages" {
+		c.AbortWithStatusJSON(status, gin.H{"type": "error", "error": gin.H{"type": "api_error", "message": err.Error()}})
+		return
+	}
+	c.AbortWithStatusJSON(status, gin.H{"error": gin.H{"message": err.Error(), "type": "routing_error", "code": err.Error()}})
 }
 
 // channelSupportsRequestPath reports whether a channel can serve the request path.
