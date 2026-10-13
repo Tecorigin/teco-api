@@ -134,17 +134,18 @@ func PerfMetricStartTime(hours int) int64 {
 
 // PerfMetricSample stores per-request samples for percentile and SLO analytics.
 type PerfMetricSample struct {
-	Id           int64  `json:"id" gorm:"primaryKey"`
-	ModelName    string `json:"model_name" gorm:"size:128;index:idx_perf_sample_model_bucket,priority:1;index:idx_perf_sample_bucket"`
-	Group        string `json:"group" gorm:"column:group;size:64;index:idx_perf_sample_model_bucket,priority:2"`
-	BucketTs     int64  `json:"bucket_ts" gorm:"index:idx_perf_sample_model_bucket,priority:3;index:idx_perf_sample_bucket"`
-	LatencyMs    int64  `json:"latency_ms" gorm:"default:0"`
-	TtftMs       int64  `json:"ttft_ms" gorm:"default:0"`
-	TpotMs       int64  `json:"tpot_ms" gorm:"default:0"`
-	HasTtft      bool   `json:"has_ttft" gorm:"default:false"`
-	OutputTokens int64  `json:"output_tokens" gorm:"default:0"`
-	Success      bool   `json:"success"`
-	CreatedAt    int64  `json:"created_at" gorm:"index:idx_perf_sample_created_at"`
+	Id            int64  `json:"id" gorm:"primaryKey"`
+	ModelName     string `json:"model_name" gorm:"size:128;index:idx_perf_sample_model_bucket,priority:1;index:idx_perf_sample_bucket"`
+	Group         string `json:"group" gorm:"column:group;size:64;index:idx_perf_sample_model_bucket,priority:2"`
+	BucketTs      int64  `json:"bucket_ts" gorm:"index:idx_perf_sample_model_bucket,priority:3;index:idx_perf_sample_bucket"`
+	LatencyMs     int64  `json:"latency_ms" gorm:"default:0"`
+	TtftMs        int64  `json:"ttft_ms" gorm:"default:0"`
+	TpotMs        int64  `json:"tpot_ms" gorm:"default:0"`
+	HasTtft       bool   `json:"has_ttft" gorm:"default:false"`
+	OutputTokens  int64  `json:"output_tokens" gorm:"default:0"`
+	Success       bool   `json:"success"`
+	IsChannelTest bool   `json:"-" gorm:"default:false;index:idx_perf_sample_slo,priority:1"`
+	CreatedAt     int64  `json:"created_at" gorm:"index:idx_perf_sample_created_at;index:idx_perf_sample_slo,priority:2"`
 }
 
 func (PerfMetricSample) TableName() string {
@@ -179,9 +180,9 @@ type ModelSLOStatsRow struct {
 }
 
 func GetModelSLOStats(startTs int64, endTs int64, modelName string, groups []string, sloTtftThresholdMs int64, sloTpotThresholdMs int64) ([]ModelSLOStatsRow, error) {
-	var samples []PerfMetricSample
 	query := DB.Model(&PerfMetricSample{}).
-		Where("created_at >= ? AND created_at <= ?", startTs, endTs)
+		Select("model_name, bucket_ts, latency_ms, ttft_ms, tpot_ms, has_ttft, output_tokens, success").
+		Where("created_at >= ? AND created_at <= ? AND is_channel_test = ?", startTs, endTs, false)
 	if modelName != "" {
 		query = query.Where("model_name LIKE ? ESCAPE '!'", "%"+escapeLikeValue(modelName)+"%")
 	}
@@ -191,13 +192,12 @@ func GetModelSLOStats(startTs int64, endTs int64, modelName string, groups []str
 		}
 		query = query.Where(commonGroupCol+" IN ?", groups)
 	}
-	if err := query.Order("model_name ASC, created_at ASC").Find(&samples).Error; err != nil {
+
+	sampleRows, err := query.Rows()
+	if err != nil {
 		return nil, err
 	}
-
-	if len(samples) == 0 {
-		return []ModelSLOStatsRow{}, nil
-	}
+	defer sampleRows.Close()
 
 	type agg struct {
 		requestCount int64
@@ -212,7 +212,30 @@ func GetModelSLOStats(startTs int64, endTs int64, modelName string, groups []str
 	}
 
 	byModel := make(map[string]*agg)
-	for _, sample := range samples {
+	for sampleRows.Next() {
+		var sample struct {
+			ModelName    string
+			BucketTs     int64
+			LatencyMs    int64
+			TtftMs       int64
+			TpotMs       int64
+			HasTtft      bool
+			OutputTokens int64
+			Success      bool
+		}
+		if err := sampleRows.Scan(
+			&sample.ModelName,
+			&sample.BucketTs,
+			&sample.LatencyMs,
+			&sample.TtftMs,
+			&sample.TpotMs,
+			&sample.HasTtft,
+			&sample.OutputTokens,
+			&sample.Success,
+		); err != nil {
+			return nil, err
+		}
+
 		current := byModel[sample.ModelName]
 		if current == nil {
 			current = &agg{}
@@ -236,6 +259,12 @@ func GetModelSLOStats(startTs int64, endTs int64, modelName string, groups []str
 		if sample.Success && sample.TtftMs > 0 && sample.TtftMs <= sloTtftThresholdMs && sample.TpotMs > 0 && sample.TpotMs <= sloTpotThresholdMs {
 			current.sloHits++
 		}
+	}
+	if err := sampleRows.Err(); err != nil {
+		return nil, err
+	}
+	if len(byModel) == 0 {
+		return []ModelSLOStatsRow{}, nil
 	}
 
 	rows := make([]ModelSLOStatsRow, 0, len(byModel))
@@ -266,18 +295,17 @@ func percentileInt64(values []int64, p float64) int64 {
 	if len(values) == 0 {
 		return 0
 	}
-	sorted := append([]int64(nil), values...)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i] < sorted[j]
+	sort.Slice(values, func(i, j int) bool {
+		return values[i] < values[j]
 	})
-	idx := int(math.Ceil(float64(len(sorted))*p)) - 1
+	idx := int(math.Ceil(float64(len(values))*p)) - 1
 	if idx < 0 {
 		idx = 0
 	}
-	if idx >= len(sorted) {
-		idx = len(sorted) - 1
+	if idx >= len(values) {
+		idx = len(values) - 1
 	}
-	return sorted[idx]
+	return values[idx]
 }
 
 func percent(hit int64, total int64) float64 {

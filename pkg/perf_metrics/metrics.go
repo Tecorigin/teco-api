@@ -43,14 +43,15 @@ func BuildRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens in
 		generationMs = latencyMs
 	}
 	return Sample{
-		Model:        info.OriginModelName,
-		Group:        info.UsingGroup,
-		LatencyMs:    latencyMs,
-		TtftMs:       ttftMs,
-		HasTtft:      hasTtft,
-		Success:      success,
-		OutputTokens: outputTokens,
-		GenerationMs: generationMs,
+		Model:         info.OriginModelName,
+		Group:         info.UsingGroup,
+		LatencyMs:     latencyMs,
+		TtftMs:        ttftMs,
+		HasTtft:       hasTtft,
+		Success:       success,
+		OutputTokens:  outputTokens,
+		GenerationMs:  generationMs,
+		IsChannelTest: info.IsChannelTest,
 	}
 }
 
@@ -348,6 +349,7 @@ func buildQueryResult(modelName string, merged map[bucketKey]counters) QueryResu
 
 		results = append(results, GroupResult{
 			Group:        group,
+			RequestCount: total.requestCount,
 			AvgTtftMs:    avg(total.ttftSumMs, total.ttftCount),
 			AvgLatencyMs: avg(total.totalLatencyMs, total.requestCount),
 			SuccessRate:  successRate(total),
@@ -454,16 +456,17 @@ func recordSample(sample Sample, bucketTs int64) {
 		ttftMs = sample.TtftMs
 	}
 	if err := model.CreatePerfMetricSample(&model.PerfMetricSample{
-		ModelName:    sample.Model,
-		Group:        sample.Group,
-		BucketTs:     bucketTs,
-		LatencyMs:    sample.LatencyMs,
-		TtftMs:       ttftMs,
-		TpotMs:       tpotMs,
-		HasTtft:      sample.HasTtft,
-		OutputTokens: sample.OutputTokens,
-		Success:      sample.Success,
-		CreatedAt:    time.Now().Unix(),
+		ModelName:     sample.Model,
+		Group:         sample.Group,
+		BucketTs:      bucketTs,
+		LatencyMs:     sample.LatencyMs,
+		TtftMs:        ttftMs,
+		TpotMs:        tpotMs,
+		HasTtft:       sample.HasTtft,
+		OutputTokens:  sample.OutputTokens,
+		Success:       sample.Success,
+		IsChannelTest: sample.IsChannelTest,
+		CreatedAt:     time.Now().Unix(),
 	}); err != nil {
 		common.SysError(fmt.Sprintf("failed to record perf metric sample model=%s group=%s: %s", sample.Model, sample.Group, err.Error()))
 	}

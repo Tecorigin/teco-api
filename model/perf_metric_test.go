@@ -16,6 +16,7 @@ func TestGetModelSLOStatsComputesPercentilesAndFilter(t *testing.T) {
 		{ModelName: "gpt-4o", Group: "default", BucketTs: 101, LatencyMs: 200, TtftMs: 200, TpotMs: 20, HasTtft: true, OutputTokens: 60, Success: true, CreatedAt: 101},
 		{ModelName: "gpt-4o", Group: "default", BucketTs: 102, LatencyMs: 300, TtftMs: 300, TpotMs: 3000, HasTtft: true, OutputTokens: 70, Success: false, CreatedAt: 102},
 		{ModelName: "gpt-4o", Group: "default", BucketTs: 103, LatencyMs: 900, TtftMs: 900, TpotMs: 3000, HasTtft: false, OutputTokens: 80, Success: true, CreatedAt: 103},
+		{ModelName: "gpt-4o", Group: "default", BucketTs: 103, LatencyMs: 10000, TtftMs: 10000, TpotMs: 10000, HasTtft: true, OutputTokens: 10000, Success: true, IsChannelTest: true, CreatedAt: 103},
 		{ModelName: "claude-3-5-sonnet", Group: "default", BucketTs: 104, LatencyMs: 150, TtftMs: 150, TpotMs: 15, OutputTokens: 30, Success: true, CreatedAt: 104},
 	}
 	for _, sample := range samples {
