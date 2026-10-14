@@ -19,10 +19,17 @@ const slaBucketSeconds int64 = 300 // 5 minutes
 
 // GetSLAStats computes SLA per (username, model_name) over [startTs, endTs].
 //
-// SLA = (1 - Σ(per-5min error rate) / total 5-min windows) × 100%
-// Per-5min error rate = failed_reqs / valid_reqs × 100% (0 if valid_reqs < 5).
-// A 5-min window is counted as "error window" if its error rate > 0.
+// SLA = (1 - error windows / populated windows) × 100%.
+// A window is an error window when it has at least 5 requests and a failure.
 func GetSLAStats(startTs int64, endTs int64, username string, modelName string) ([]SLAStatsRow, error) {
+	return getSLAStats(startTs, endTs, username, modelName, false)
+}
+
+func GetUserSLAStats(startTs int64, endTs int64, username string, modelName string) ([]SLAStatsRow, error) {
+	return getSLAStats(startTs, endTs, username, modelName, true)
+}
+
+func getSLAStats(startTs int64, endTs int64, username string, modelName string, userSLA bool) ([]SLAStatsRow, error) {
 	if startTs <= 0 || endTs <= 0 || startTs >= endTs {
 		return []SLAStatsRow{}, nil
 	}
@@ -34,8 +41,7 @@ func GetSLAStats(startTs int64, endTs int64, username string, modelName string) 
 		return []SLAStatsRow{}, nil
 	}
 
-	// Query logs grouped by (username, model_name, 5-min bucket).
-	// type=2 (consume) = success, type=5 (error) = failure.
+	// Combine stored buckets for the same displayed username and model.
 	type bucketRow struct {
 		Username  string `gorm:"column:username"`
 		ModelName string `gorm:"column:model_name"`
@@ -45,15 +51,13 @@ func GetSLAStats(startTs int64, endTs int64, username string, modelName string) 
 	}
 
 	var rows []bucketRow
-	query := LOG_DB.Table("logs").
-		Select("username, model_name, "+
-			"(created_at - (created_at % ?)) AS bucket_ts, "+
-			"COUNT(*) AS total, "+
-			"SUM(CASE WHEN type = ? THEN 1 ELSE 0 END) AS failed",
-			slaBucketSeconds, LogTypeError).
-		Where("created_at >= ? AND created_at <= ?", bucketStart, bucketEnd).
-		Where("type IN (?, ?)", LogTypeConsume, LogTypeError).
-		Where("username <> '' AND model_name <> ''")
+	mode := "model"
+	if userSLA {
+		mode = "user"
+	}
+	query := DB.Model(&SLABucket{}).
+		Select("username, model_name, bucket_ts, SUM(total) AS total, SUM(failed) AS failed").
+		Where("bucket_ts >= ? AND bucket_ts <= ? AND mode = ?", bucketStart, bucketEnd, mode)
 
 	if username != "" {
 		query = query.Where("username LIKE ?", "%"+username+"%")

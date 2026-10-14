@@ -80,6 +80,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		newAPIError *types.NewAPIError
 		ws          *websocket.Conn
 	)
+	slaID := common.NewRequestId()
+	slaStart := time.Now().Unix()
+	slaSucceeded := false
+	slaAttempts := 0
+	defer func() {
+		recordRelaySLA(c, slaID, slaID+"-user", requestId, "user", slaStart, slaAttempts, slaSucceeded)
+	}()
 
 	if relayFormat == types.RelayFormatOpenAIRealtime {
 		var err error
@@ -331,6 +338,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
+		attemptStartedAt := time.Now().Unix()
+		slaAttempts++
 		switch relayFormat {
 		case types.RelayFormatOpenAIRealtime:
 			newAPIError = relay.WssHelper(c, relayInfo)
@@ -342,8 +351,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError = relayHandler(c, relayInfo)
 		}
 		service.ReleaseRoutingAttempt(c)
+		recordRelaySLA(c, slaID, fmt.Sprintf("%s-model-%d", slaID, retryParam.GetRetry()), requestId, "model", attemptStartedAt, retryParam.GetRetry(), newAPIError == nil)
 
 		if newAPIError == nil {
+			slaSucceeded = true
 			relayInfo.LastError = nil
 			return
 		}
@@ -382,6 +393,22 @@ func addUsedChannel(c *gin.Context, channelId int) {
 	useChannel := c.GetStringSlice("use_channel")
 	useChannel = append(useChannel, fmt.Sprintf("%d", channelId))
 	c.Set("use_channel", useChannel)
+}
+
+func recordRelaySLA(c *gin.Context, internalRequestID string, eventID string, requestID string, mode string, startedAt int64, attempt int, succeeded bool) {
+	username := c.GetString("username")
+	modelName := c.GetString("original_model")
+	if username == "" || modelName == "" {
+		return
+	}
+	if err := model.RecordSLAResult(model.SLAResult{
+		EventID: eventID, RequestID: requestID, Mode: mode,
+		InternalRequestID: internalRequestID, ChannelID: c.GetInt("channel_id"),
+		UserID: c.GetInt("id"), Username: username, ModelName: modelName,
+		StartedAt: startedAt, FinishedAt: time.Now().Unix(), Attempt: attempt, Succeeded: succeeded,
+	}); err != nil {
+		logger.LogError(c, "record SLA result failed: "+err.Error())
+	}
 }
 
 func fastTokenCountMetaForPricing(request dto.Request) *types.TokenCountMeta {
@@ -646,6 +673,14 @@ func RelayTaskFetch(c *gin.Context) {
 }
 
 func RelayTask(c *gin.Context) {
+	slaID := common.NewRequestId()
+	slaStart := time.Now().Unix()
+	slaSucceeded := false
+	slaAttempts := 0
+	requestID := c.GetString(common.RequestIdKey)
+	defer func() {
+		recordRelaySLA(c, slaID, slaID+"-user", requestID, "user", slaStart, slaAttempts, slaSucceeded)
+	}()
 	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatTask, nil, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, &dto.TaskError{
@@ -711,8 +746,12 @@ func RelayTask(c *gin.Context) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
+		attemptStartedAt := time.Now().Unix()
+		slaAttempts++
 		result, taskErr = relay.RelayTaskSubmit(c, relayInfo)
+		recordRelaySLA(c, slaID, fmt.Sprintf("%s-model-%d", slaID, retryParam.GetRetry()), requestID, "model", attemptStartedAt, retryParam.GetRetry(), taskErr == nil)
 		if taskErr == nil {
+			slaSucceeded = true
 			break
 		}
 

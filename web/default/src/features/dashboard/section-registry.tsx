@@ -57,11 +57,22 @@ const DASHBOARD_SECTIONS = [
     adminOnly: true,
     build: () => null,
   },
+  {
+    id: 'user-sla',
+    titleKey: 'User SLA Analytics',
+    adminOnly: true,
+    build: () => null,
+  },
 ] as const
 
 export type DashboardSectionId = (typeof DASHBOARD_SECTIONS)[number]['id']
 
-const ADMIN_ONLY_SECTIONS = new Set<string>(['users', 'model-slo', 'model-sla'])
+const ADMIN_ONLY_SECTIONS = new Set<string>([
+  'users',
+  'model-slo',
+  'model-sla',
+  'user-sla',
+])
 
 const dashboardRegistry = createSectionRegistry<
   DashboardSectionId,

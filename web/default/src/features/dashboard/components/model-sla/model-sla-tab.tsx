@@ -23,12 +23,19 @@ import { useTranslation } from 'react-i18next'
 
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useDebounce } from '@/hooks/use-debounce'
+import { TIME_RANGE_PRESETS } from '@/features/dashboard/constants'
 import { getSLAMetrics } from '@/features/performance-metrics/api'
 import { CompactDateTimeRangePicker } from '@/features/usage-logs/components/compact-date-time-range-picker'
-import { TIME_RANGE_PRESETS } from '@/features/dashboard/constants'
+import { useDebounce } from '@/hooks/use-debounce'
 import { getRollingDateRange } from '@/lib/time'
 
 type SortKey =
@@ -51,7 +58,8 @@ function slaColorClass(sla: number) {
   return 'text-rose-600 dark:text-rose-400'
 }
 
-export function ModelSLATab() {
+export function ModelSLATab(props: { mode?: 'model' | 'user' }) {
+  const mode = props.mode ?? 'model'
   const { t } = useTranslation()
   const [selectedRange, setSelectedRange] = useState(1)
   const [startDate, setStartDate] = useState<Date | undefined>()
@@ -84,9 +92,16 @@ export function ModelSLATab() {
   }, [])
 
   const metricsQuery = useQuery({
-    queryKey: ['model-sla-metrics', timeRange, debouncedUsername, debouncedModelName],
+    queryKey: [
+      'model-sla-metrics',
+      mode,
+      timeRange,
+      debouncedUsername,
+      debouncedModelName,
+    ],
     queryFn: () =>
       getSLAMetrics({
+        mode,
         ...timeRange,
         username: debouncedUsername || undefined,
         model_name: debouncedModelName || undefined,
@@ -119,7 +134,9 @@ export function ModelSLATab() {
         setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'))
         return current
       }
-      setSortDirection(key === 'username' || key === 'model_name' ? 'asc' : 'desc')
+      setSortDirection(
+        key === 'username' || key === 'model_name' ? 'asc' : 'desc'
+      )
       return key
     })
   }, [])
@@ -132,13 +149,15 @@ export function ModelSLATab() {
         className={`inline-flex items-center gap-1 ${align === 'right' ? 'ml-auto' : ''}`}
       >
         <span>{label}</span>
-        {sortKey === key ? (
-          sortDirection === 'asc' ? (
-            <ArrowUp className='size-3.5' />
-          ) : (
-            <ArrowDown className='size-3.5' />
-          )
-        ) : null}
+        {sortKey === key && (
+          <span>
+            {sortDirection === 'asc' ? (
+              <ArrowUp className='size-3.5' />
+            ) : (
+              <ArrowDown className='size-3.5' />
+            )}
+          </span>
+        )}
       </button>
     ),
     [sortDirection, sortKey, toggleSort]
@@ -196,64 +215,142 @@ export function ModelSLATab() {
       <div className='overflow-hidden rounded-lg border'>
         <div className='flex items-center gap-2 border-b px-3 py-2 sm:px-5 sm:py-3'>
           <ShieldCheck className='text-muted-foreground/60 size-4' />
-          <div className='text-sm font-semibold'>{t('Model SLA Analytics')}</div>
+          <div className='text-sm font-semibold'>
+            {mode === 'user'
+              ? t('User SLA Analytics')
+              : t('Model SLA Analytics')}
+          </div>
         </div>
 
         <div className='overflow-x-auto'>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{renderSortableHead(t('Username'), 'username')}</TableHead>
-                <TableHead>{renderSortableHead(t('Model'), 'model_name')}</TableHead>
-                <TableHead className='text-right'>{renderSortableHead(t('SLA'), 'sla', 'right')}</TableHead>
-                <TableHead className='text-right'>{renderSortableHead(t('Total Windows'), 'total_windows', 'right')}</TableHead>
-                <TableHead className='text-right'>{renderSortableHead(t('Error Windows'), 'error_windows', 'right')}</TableHead>
-                <TableHead className='text-right'>{renderSortableHead(t('Total Requests'), 'total_reqs', 'right')}</TableHead>
-                <TableHead className='text-right'>{renderSortableHead(t('Failed Requests'), 'failed_reqs', 'right')}</TableHead>
+                <TableHead>
+                  {renderSortableHead(t('Username'), 'username')}
+                </TableHead>
+                <TableHead>
+                  {renderSortableHead(t('Model'), 'model_name')}
+                </TableHead>
+                <TableHead className='text-right'>
+                  {renderSortableHead(t('SLA'), 'sla', 'right')}
+                </TableHead>
+                <TableHead className='text-right'>
+                  {renderSortableHead(
+                    t('Total Windows'),
+                    'total_windows',
+                    'right'
+                  )}
+                </TableHead>
+                <TableHead className='text-right'>
+                  {renderSortableHead(
+                    t('Error Windows'),
+                    'error_windows',
+                    'right'
+                  )}
+                </TableHead>
+                <TableHead className='text-right'>
+                  {renderSortableHead(
+                    t('Total Requests'),
+                    'total_reqs',
+                    'right'
+                  )}
+                </TableHead>
+                <TableHead className='text-right'>
+                  {renderSortableHead(
+                    t('Failed Requests'),
+                    'failed_reqs',
+                    'right'
+                  )}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {metricsQuery.isLoading ? (
-                Array.from({ length: 8 }).map((_, idx) => (
-                  <TableRow key={idx}>
+                [
+                  'sla-1',
+                  'sla-2',
+                  'sla-3',
+                  'sla-4',
+                  'sla-5',
+                  'sla-6',
+                  'sla-7',
+                  'sla-8',
+                ].map((key) => (
+                  <TableRow key={key}>
                     <TableCell colSpan={7}>
                       <Skeleton className='h-8 w-full' />
                     </TableCell>
                   </TableRow>
                 ))
-              ) : rows.length > 0 ? (
-                rows.map((row, idx) => {
-                  const isFirstOfUser = idx === 0 || rows[idx - 1].username !== row.username
-                  let rowSpan = 1
-                  if (isFirstOfUser) {
-                    for (let i = idx + 1; i < rows.length && rows[i].username === row.username; i++) {
-                      rowSpan++
-                    }
-                  }
-                  return (
-                    <TableRow key={`${row.username}-${row.model_name}-${idx}`}>
-                      {isFirstOfUser && (
-                        <TableCell className='font-medium align-top' rowSpan={rowSpan}>
-                          {row.username}
-                        </TableCell>
-                      )}
-                      <TableCell className='font-medium'>{row.model_name}</TableCell>
-                      <TableCell className={`text-right font-semibold ${slaColorClass(row.sla)}`}>
-                        {formatDecimal(row.sla)}%
-                      </TableCell>
-                      <TableCell className='text-right'>{row.total_windows}</TableCell>
-                      <TableCell className='text-right'>{row.error_windows}</TableCell>
-                      <TableCell className='text-right'>{row.total_reqs}</TableCell>
-                      <TableCell className='text-right'>{row.failed_reqs}</TableCell>
-                    </TableRow>
-                  )
-                })
               ) : (
-                <TableRow>
-                  <TableCell colSpan={7} className='text-muted-foreground py-8 text-center'>
-                    {t('No model SLA data available for the selected range.')}
-                  </TableCell>
-                </TableRow>
+                <>
+                  {rows.length > 0 &&
+                    rows.map((row, idx) => {
+                      const isFirstOfUser =
+                        idx === 0 || rows[idx - 1].username !== row.username
+                      let rowSpan = 1
+                      if (isFirstOfUser) {
+                        for (
+                          let i = idx + 1;
+                          i < rows.length && rows[i].username === row.username;
+                          i++
+                        ) {
+                          rowSpan++
+                        }
+                      }
+                      return (
+                        <TableRow
+                          key={JSON.stringify([row.username, row.model_name])}
+                        >
+                          {isFirstOfUser && (
+                            <TableCell
+                              className='align-top font-medium'
+                              rowSpan={rowSpan}
+                            >
+                              {row.username}
+                            </TableCell>
+                          )}
+                          <TableCell className='font-medium'>
+                            {row.model_name}
+                          </TableCell>
+                          <TableCell
+                            className={`text-right font-semibold ${slaColorClass(row.sla)}`}
+                          >
+                            {formatDecimal(row.sla)}%
+                          </TableCell>
+                          <TableCell className='text-right'>
+                            {row.total_windows}
+                          </TableCell>
+                          <TableCell className='text-right'>
+                            {row.error_windows}
+                          </TableCell>
+                          <TableCell className='text-right'>
+                            {row.total_reqs}
+                          </TableCell>
+                          <TableCell className='text-right'>
+                            {row.failed_reqs}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  {rows.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className='text-muted-foreground py-8 text-center'
+                      >
+                        {mode === 'user'
+                          ? t(
+                              'No user SLA data available for the selected range.'
+                            )
+                          : t(
+                              'No model SLA data available for the selected range.'
+                            )}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
               )}
             </TableBody>
           </Table>

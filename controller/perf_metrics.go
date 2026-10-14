@@ -175,7 +175,11 @@ func GetSLAMetrics(c *gin.Context) {
 		startTimestamp = endTimestamp - int64(hours)*3600
 	}
 
-	rows, err := model.GetSLAStats(startTimestamp, endTimestamp, c.Query("username"), c.Query("model_name"))
+	getStats := model.GetSLAStats
+	if c.Query("mode") == "user" {
+		getStats = model.GetUserSLAStats
+	}
+	rows, err := getStats(startTimestamp, endTimestamp, c.Query("username"), c.Query("model_name"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

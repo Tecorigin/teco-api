@@ -8,6 +8,8 @@ function stableStringify(obj) {
 
 const newKeys = {
     en: {
+        'User SLA Analytics': 'User SLA Analytics',
+        'No user SLA data available for the selected range.': 'No user SLA data available for the selected range.',
         'Request Routing': 'Request Routing',
         'JSON Configuration': 'JSON Configuration',
         'Model Performance Statistics': 'Model Performance Statistics',
@@ -59,6 +61,8 @@ const newKeys = {
         'No rate limits configured': 'No rate limits configured',
     },
     zh: {
+        'User SLA Analytics': '用户 SLA 统计',
+        'No user SLA data available for the selected range.': '所选时间范围内暂无用户 SLA 数据。',
         'Request Routing': '路由规则',
         'JSON Configuration': 'JSON 配置',
         'Model Performance Statistics': '模型性能统计',
@@ -110,6 +114,8 @@ const newKeys = {
         'No rate limits configured': '尚未配置速率限制',
     },
     'zh-TW': {
+        'User SLA Analytics': '使用者 SLA 統計',
+        'No user SLA data available for the selected range.': '所選時間範圍內暫無使用者 SLA 資料。',
         'Model Performance Statistics': '模型效能統計',
         'Compare model-level latency, throughput, success rate and request volume over the selected time range.': '比較所選時間範圍內各模型的延遲、吞吐量、成功率與請求量。',
         'Select model': '選擇模型',
@@ -159,6 +165,8 @@ const newKeys = {
         'No rate limits configured': '尚未設定速率限制',
     },
     fr: {
+        'User SLA Analytics': 'Statistiques SLA utilisateur',
+        'No user SLA data available for the selected range.': 'Aucune donnée SLA utilisateur pour la période sélectionnée.',
         'Request Routing': 'Routage des requêtes',
         'JSON Configuration': 'Configuration JSON',
         'Model Performance Statistics': 'Statistiques de performance des modèles',
@@ -210,6 +218,8 @@ const newKeys = {
         'No rate limits configured': 'Aucune limite configurée',
     },
     ja: {
+        'User SLA Analytics': 'ユーザー SLA 統計',
+        'No user SLA data available for the selected range.': '選択した期間のユーザー SLA データはありません。',
         'Request Routing': 'リクエストルーティング',
         'JSON Configuration': 'JSON 設定',
         'Model Performance Statistics': 'モデル性能統計',
@@ -261,6 +271,8 @@ const newKeys = {
         'No rate limits configured': 'レート制限は未設定です',
     },
     ru: {
+        'User SLA Analytics': 'SLA пользователей',
+        'No user SLA data available for the selected range.': 'Нет данных SLA пользователей за выбранный период.',
         'Request Routing': 'Маршрутизация запросов',
         'JSON Configuration': 'Конфигурация JSON',
         'Model Performance Statistics': 'Статистика производительности моделей',
@@ -312,6 +324,8 @@ const newKeys = {
         'No rate limits configured': 'Лимиты не настроены',
     },
     vi: {
+        'User SLA Analytics': 'Thống kê SLA người dùng',
+        'No user SLA data available for the selected range.': 'Không có dữ liệu SLA người dùng trong khoảng thời gian đã chọn.',
         'Request Routing': 'Định tuyến yêu cầu',
         'JSON Configuration': 'Cấu hình JSON',
         'Model Performance Statistics': 'Thống kê hiệu năng mô hình',

@@ -53,7 +53,7 @@ export async function getPerfMetricsSummary(
   const params =
     typeof hoursOrParams === 'number'
       ? { hours: hoursOrParams }
-      : hoursOrParams ?? {}
+      : (hoursOrParams ?? {})
 
   const res = await api.get<PerfSummaryAllData>('/api/perf-metrics/summary', {
     params,
@@ -68,7 +68,7 @@ export async function getPerfMetrics(
   const params =
     typeof hoursOrParams === 'number'
       ? { hours: hoursOrParams }
-      : hoursOrParams ?? {}
+      : (hoursOrParams ?? {})
 
   const res = await api.get<PerformanceMetricsData>('/api/perf-metrics', {
     params: {
@@ -82,13 +82,17 @@ export async function getPerfMetrics(
 export async function getModelSLOMetrics(
   params: ModelSLOMetricsParams
 ): Promise<ModelSLOMetricsData> {
-  const res = await api.get<ModelSLOMetricsData>('/api/perf-metrics/model-slo', {
-    params,
-  })
+  const res = await api.get<ModelSLOMetricsData>(
+    '/api/perf-metrics/model-slo',
+    {
+      params,
+    }
+  )
   return res.data
 }
 
 export type SLAMetricsParams = {
+  mode?: 'model' | 'user'
   hours?: number
   start_timestamp?: number
   end_timestamp?: number
