@@ -49,6 +49,100 @@ func TestRoutingFeaturesProtocols(t *testing.T) {
 	assert.Equal(t, CountTextToken("hello", "routing-model")+3, tokens)
 }
 
+func TestRequestRoutingTokenRangeFallback(t *testing.T) {
+	previousDB, previousCache := model.DB, common.MemoryCacheEnabled
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	model.DB, common.MemoryCacheEnabled = database, true
+	t.Cleanup(func() {
+		model.DB, common.MemoryCacheEnabled = previousDB, previousCache
+		if previousDB != nil && previousCache {
+			model.InitChannelCache()
+		}
+	})
+	require.NoError(t, database.AutoMigrate(&model.Channel{}, &model.Ability{}))
+	require.NoError(t, database.Create(&model.Channel{Id: 101, Type: 1, Status: common.ChannelStatusEnabled, Models: "routing-model", Group: "default"}).Error)
+	require.NoError(t, database.Create(&model.Ability{ChannelId: 101, Model: "routing-model", Group: "default", Enabled: true}).Error)
+	model.InitChannelCache()
+	common.OptionMapRWMutex.Lock()
+	previousOptionMap := common.OptionMap
+	previousOption, existed := common.OptionMap[operation_setting.RequestRoutingOption]
+	if common.OptionMap == nil {
+		common.OptionMap = make(map[string]string)
+	}
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		defer common.OptionMapRWMutex.Unlock()
+		if previousOptionMap == nil {
+			common.OptionMap = nil
+		} else if existed {
+			common.OptionMap[operation_setting.RequestRoutingOption] = previousOption
+		} else {
+			delete(common.OptionMap, operation_setting.RequestRoutingOption)
+		}
+	})
+	for _, sample := range []struct {
+		path string
+		body string
+	}{
+		{"/v1/chat/completions", `{"messages":[{"role":"user","content":"hello"}]}`},
+		{"/pg/chat/completions", `{"messages":[{"role":"user","content":"hello"}]}`},
+		{"/v1/messages", `{"messages":[{"role":"user","content":"hello"}]}`},
+		{"/v1/responses", `{"input":"hello"}`},
+	} {
+		t.Run(sample.path, func(t *testing.T) {
+			tokens, _, err := routingFeatures([]byte(sample.body), "routing-model", sample.path)
+			require.NoError(t, err)
+			upper := tokens + 1
+			for _, scenario := range []struct {
+				name   string
+				ranges []operation_setting.RoutingRange
+				active bool
+			}{
+				{"below minimum", []operation_setting.RoutingRange{{MinTokens: upper}}, false},
+				{"gap", []operation_setting.RoutingRange{{MaxTokens: &tokens}, {MinTokens: upper}}, false},
+				{"exclusive maximum", []operation_setting.RoutingRange{{MaxTokens: &tokens}}, false},
+				{"inclusive minimum", []operation_setting.RoutingRange{{MinTokens: tokens, MaxTokens: &upper}}, true},
+				{"inside range", []operation_setting.RoutingRange{{MaxTokens: &upper}}, true},
+				{"unbounded range", []operation_setting.RoutingRange{{MinTokens: tokens}}, true},
+			} {
+				t.Run(scenario.name, func(t *testing.T) {
+					for index := range scenario.ranges {
+						scenario.ranges[index].Instances = []operation_setting.RoutingInstance{{ID: fmt.Sprintf("instance-%d", index), ChannelIDs: []int{102 + index}}}
+					}
+					config := operation_setting.RequestRouting{Enabled: true, Version: "test", Rules: []operation_setting.RoutingRule{{ID: "test", Models: []string{"routing-model"}, Ranges: scenario.ranges}}}
+					raw, err := common.Marshal(config)
+					require.NoError(t, err)
+					common.OptionMapRWMutex.Lock()
+					common.OptionMap[operation_setting.RequestRoutingOption] = string(raw)
+					common.OptionMapRWMutex.Unlock()
+					recorder := httptest.NewRecorder()
+					ctx, _ := gin.CreateTestContext(recorder)
+					ctx.Request = httptest.NewRequest("POST", sample.path, strings.NewReader(sample.body))
+					require.NoError(t, PrepareRequestRouting(ctx, "routing-model", "default"))
+					require.NoError(t, PrepareRequestRouting(ctx, "routing-model", "default"))
+					assert.Equal(t, scenario.active, RequestRoutingActive(ctx))
+					if scenario.active {
+						assert.Equal(t, "test", recorder.Header().Get("X-Teco-Routing-Version"))
+						assert.NotEmpty(t, recorder.Header().Get("X-Teco-Routing-Class"))
+						return
+					}
+					for _, header := range []string{"X-Teco-Routing-Version", "X-Teco-Routing-Class", "X-Teco-Routing-Count-Mode"} {
+						assert.Empty(t, recorder.Header().Get(header))
+					}
+					channel, group, err := CacheGetRandomSatisfiedChannel(&RetryParam{Ctx: ctx, ModelName: "routing-model", TokenGroup: "default", RequestPath: sample.path})
+					require.NoError(t, err)
+					require.NotNil(t, channel)
+					assert.Equal(t, 101, channel.Id)
+					assert.Equal(t, "default", group)
+					require.NoError(t, AcquireManagedRoutingChannel(ctx, channel.Id))
+				})
+			}
+		})
+	}
+}
+
 func TestRoutingPoolSelectionAndCapacity(t *testing.T) {
 	previousDB, previousCache := model.DB, common.MemoryCacheEnabled
 	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})

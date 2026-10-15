@@ -103,11 +103,12 @@ func PrepareRequestRouting(c *gin.Context, name, group string) error {
 			}
 		}
 		if len(state.pool) == 0 {
-			return &RoutingError{http.StatusBadRequest, "routing_token_range_uncovered"}
+			state.rule = nil
+		} else {
+			c.Header("X-Teco-Routing-Version", config.Version)
+			c.Header("X-Teco-Routing-Class", state.class)
+			c.Header("X-Teco-Routing-Count-Mode", "project-token-counter-v1")
 		}
-		c.Header("X-Teco-Routing-Version", config.Version)
-		c.Header("X-Teco-Routing-Class", state.class)
-		c.Header("X-Teco-Routing-Count-Mode", "project-token-counter-v1")
 	}
 	c.Set(routingContextKey, state)
 	return nil

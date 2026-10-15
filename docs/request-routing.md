@@ -82,7 +82,9 @@ Rules now use `ranges`, each containing `min_tokens` (inclusive), optional
 `max_tokens` (exclusive; omitted/null means unlimited), and `instances`.
 For example, [0, 10000), [10000, 20000), and [50000, unlimited) can each use
 independent channels. Overlapping intervals are rejected; uncovered lengths
-return `routing_token_range_uncovered`, not unrestricted fallback. Legacy
+fall back to the existing default channel selection, including affinity,
+channel priorities, and retries, without routing decision headers. If default
+selection chooses a managed instance, its shared capacity checks still apply. Legacy
 short/long configuration is converted on read. Enter numerical values, e.g.
 10000 for 10k. Empty groups match all groups without granting extra permissions.
 All four supported interfaces apply automatically. The rule `id` is displayed
