@@ -710,7 +710,7 @@ export function ImageGenerationPlayground() {
         </Card>
 
         <Dialog open={Boolean(previewImage)} onOpenChange={(open) => !open && setPreviewImage(null)}>
-          <DialogContent className='w-[96vw] max-w-7xl'>
+          <DialogContent className='w-[96vw] max-w-7xl sm:max-w-7xl'>
             <DialogHeader>
               <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
                 <DialogTitle>{t('Image Preview')}</DialogTitle>
