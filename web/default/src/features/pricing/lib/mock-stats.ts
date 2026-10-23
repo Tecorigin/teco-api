@@ -16,6 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { ImageGenerationRequest } from '@/features/image-generation/types'
+import type { SpeechRecognitionRequest } from '@/features/speech-recognition/types'
+import type { SpeechSynthesisRequest } from '@/features/speech-synthesis/types'
+import type { VideoGenerationRequest } from '@/features/video-generation/types'
+
 import type { PricingModel } from '../types'
 import {
   hashStringToSeed,
@@ -315,8 +320,7 @@ export function buildGroupPerformance(model: PricingModel): GroupPerformance[] {
   const spec = PROFILE_SPECS[profile]
   const baseSeed = hashStringToSeed(model.model_name)
 
-  return targets
-    .slice()
+  return [...targets]
     .sort((a, b) => a.localeCompare(b))
     .map<GroupPerformance>((group) => {
       const rand = seededRandom(baseSeed ^ hashStringToSeed(group))
@@ -510,6 +514,118 @@ export type SupportedParameter = {
   enumValues?: string[]
   descriptionKey: string
   required?: boolean
+}
+
+type RequestParameterMetadata<Request> = {
+  [Field in keyof Request]: Omit<SupportedParameter, 'name'>
+}
+
+const MEDIA_REQUEST_PARAMETERS = {
+  'image-generation': {
+    model: { type: 'string', required: true, descriptionKey: 'Model' },
+    prompt: { type: 'string', required: true, descriptionKey: 'Prompt' },
+    n: {
+      type: 'integer',
+      defaultValue: 2,
+      range: '1 ~ 8',
+      descriptionKey: 'Image count',
+    },
+    size: {
+      type: 'string',
+      defaultValue: '512x512',
+      descriptionKey: 'Image size',
+    },
+    response_format: {
+      type: 'enum',
+      enumValues: ['url'],
+      defaultValue: 'url',
+      descriptionKey: 'Response format',
+    },
+    num_inference_steps: {
+      type: 'integer',
+      defaultValue: 20,
+      range: '>= 1',
+      descriptionKey: 'num_inference_steps',
+    },
+    seed: { type: 'integer', defaultValue: 42, descriptionKey: 'seed' },
+    cfg: { type: 'number', defaultValue: 7.5, descriptionKey: 'cfg' },
+  },
+  'openai-video': {
+    model: { type: 'string', required: true, descriptionKey: 'Model' },
+    prompt: { type: 'string', required: true, descriptionKey: 'Prompt' },
+    size: {
+      type: 'string',
+      defaultValue: '320x160',
+      descriptionKey: 'Resolution',
+    },
+    seconds: {
+      type: 'integer',
+      defaultValue: 5,
+      range: '>= 1',
+      descriptionKey: 'seconds',
+    },
+    response_format: {
+      type: 'enum',
+      enumValues: ['url'],
+      defaultValue: 'url',
+      descriptionKey: 'Response format',
+    },
+    num_inference_steps: {
+      type: 'integer',
+      defaultValue: 20,
+      range: '>= 1',
+      descriptionKey: 'num_inference_steps',
+    },
+    seed: { type: 'integer', defaultValue: 42, descriptionKey: 'seed' },
+    guidance_scale: {
+      type: 'number',
+      defaultValue: 7.5,
+      descriptionKey: 'guidance_scale',
+    },
+    guidance_scale_2: {
+      type: 'number',
+      defaultValue: 3,
+      descriptionKey: 'guidance_scale_2',
+    },
+    fps: {
+      type: 'integer',
+      defaultValue: 16,
+      range: '>= 1',
+      descriptionKey: 'fps',
+    },
+  },
+  'speech-recognition': {
+    model: { type: 'string', required: true, descriptionKey: 'Model' },
+    messages: { type: 'array', required: true, descriptionKey: 'Audio file' },
+    max_tokens: {
+      type: 'integer',
+      defaultValue: 1024,
+      descriptionKey: 'Maximum number of tokens in the response',
+    },
+    stream: { type: 'boolean', defaultValue: false, descriptionKey: 'stream' },
+  },
+  'openai-speech': {
+    model: { type: 'string', required: true, descriptionKey: 'Model' },
+    input: { type: 'string', required: true, descriptionKey: 'Text' },
+    voice: { type: 'string', defaultValue: 'default', descriptionKey: 'Voice' },
+    response_format: {
+      type: 'enum',
+      enumValues: ['wav', 'mp3', 'opus', 'aac', 'flac', 'pcm'],
+      defaultValue: 'wav',
+      descriptionKey: 'Response format',
+    },
+    speed: {
+      type: 'number',
+      defaultValue: 1,
+      range: '>= 0.25',
+      descriptionKey: 'Speed',
+    },
+  },
+} satisfies {
+  'image-generation': RequestParameterMetadata<ImageGenerationRequest>
+  'openai-video': RequestParameterMetadata<VideoGenerationRequest>
+  'speech-recognition': RequestParameterMetadata<SpeechRecognitionRequest>
+  'openai-speech': RequestParameterMetadata<SpeechSynthesisRequest>
 }
 
 const COMMON_CHAT_PARAMS: SupportedParameter[] = [
@@ -788,8 +904,19 @@ function apiCategoryOf(model: PricingModel): ApiCategory {
  * each show their relevant parameter set.
  */
 export function buildSupportedParameters(
-  model: PricingModel
+  model: PricingModel,
+  endpointType?: string
 ): SupportedParameter[] {
+  if (endpointType && Object.hasOwn(MEDIA_REQUEST_PARAMETERS, endpointType)) {
+    const metadata =
+      MEDIA_REQUEST_PARAMETERS[
+        endpointType as keyof typeof MEDIA_REQUEST_PARAMETERS
+      ]
+    return Object.entries(metadata).map(([name, parameter]) => ({
+      name,
+      ...parameter,
+    }))
+  }
   const cat = apiCategoryOf(model)
   if (cat === 'reasoning') return REASONING_PARAMS
   if (cat === 'embedding') return EMBEDDING_PARAMS
@@ -813,12 +940,20 @@ export function buildRateLimits(model: PricingModel): RateLimit[] {
   const baseSeed = hashStringToSeed(`${model.model_name}:rl`)
   const isHeavy = cat === 'image' || cat === 'video'
   const isLight = cat === 'embedding'
-  const baseRpm = isHeavy ? 60 : isLight ? 5_000 : 500
-  const baseTpm = isHeavy ? 0 : isLight ? 1_000_000 : 200_000
-  const baseRpd = isHeavy ? 1_000 : isLight ? 100_000 : 10_000
+  let baseRpm = 500
+  let baseTpm = 200_000
+  let baseRpd = 10_000
+  if (isHeavy) {
+    baseRpm = 60
+    baseTpm = 0
+    baseRpd = 1_000
+  } else if (isLight) {
+    baseRpm = 5_000
+    baseTpm = 1_000_000
+    baseRpd = 100_000
+  }
 
-  return targets
-    .slice()
+  return [...targets]
     .sort((a, b) => a.localeCompare(b))
     .map((group) => {
       const rand = seededRandom(baseSeed ^ hashStringToSeed(group))
@@ -836,7 +971,8 @@ export function buildRateLimits(model: PricingModel): RateLimit[] {
 export function formatRateLimit(value: number): string {
   if (value <= 0) return '—'
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
-  if (value >= 1_000)
+  if (value >= 1_000) {
     return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}K`
+  }
   return value.toLocaleString()
 }

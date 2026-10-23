@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   ChevronRight,
-  Gauge,
+  // Gauge,
   KeyRound,
   ScrollText,
   Sigma,
@@ -38,12 +38,17 @@ import {
 } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import type { ImageGenerationRequest } from '@/features/image-generation/types'
+import { getEndpointTemplateLabel } from '@/features/models/constants'
+import type { SpeechRecognitionRequest } from '@/features/speech-recognition/types'
+import type { SpeechSynthesisRequest } from '@/features/speech-synthesis/types'
+import type { VideoGenerationRequest } from '@/features/video-generation/types'
 import { useStatus } from '@/hooks/use-status'
 
 import {
-  buildRateLimits,
+  // buildRateLimits,
   buildSupportedParameters,
-  formatRateLimit,
+  // formatRateLimit,
   type SupportedParameter,
 } from '../lib/mock-stats'
 import { replaceModelInPath } from '../lib/model-helpers'
@@ -109,7 +114,7 @@ function buildChatSample(lang: Lang, ctx: SampleContext): string {
       `curl ${url} \\`,
       `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${bodyJson.replace(/\n/g, '\n     ')}'`,
+      `  -d '${bodyJson.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
 
@@ -177,7 +182,7 @@ function buildAnthropicSample(lang: Lang, ctx: SampleContext): string {
       `  -H "x-api-key: $${ctx.apiKeyEnv}" \\`,
       `  -H "anthropic-version: 2023-06-01" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -249,7 +254,7 @@ function buildGeminiSample(lang: Lang, ctx: SampleContext): string {
     return [
       `curl '${url}' \\`,
       `  -H 'Content-Type: application/json' \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -299,7 +304,7 @@ function buildEmbeddingSample(lang: Lang, ctx: SampleContext): string {
       `curl ${url} \\`,
       `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -351,75 +356,141 @@ function buildEmbeddingSample(lang: Lang, ctx: SampleContext): string {
   ].join('\n')
 }
 
-function buildImageSample(lang: Lang, ctx: SampleContext): string {
+function buildMediaSample(lang: Lang, ctx: SampleContext): string {
   const url = `${ctx.baseUrl}${ctx.endpointPath}`
-  const prompt = 'A serene koi pond at sunset, ukiyo-e style.'
+  const isRecognition = ctx.endpointType === 'speech-recognition'
+  const isSpeech = ctx.endpointType === 'openai-speech'
+  const audioPlaceholder = '<BASE64_AUDIO>'
+  let payload:
+    | ImageGenerationRequest
+    | VideoGenerationRequest
+    | SpeechRecognitionRequest
+    | SpeechSynthesisRequest
+
+  if (isRecognition) {
+    payload = {
+      model: ctx.modelName,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Please transcribe this audio.' },
+            {
+              type: 'input_audio',
+              input_audio: { data: audioPlaceholder, format: 'wav' },
+            },
+          ],
+        },
+      ],
+      max_tokens: 1024,
+      stream: false,
+    }
+  } else if (isSpeech) {
+    payload = {
+      model: ctx.modelName,
+      input: 'Hello, welcome to the world of AI.',
+      voice: 'default',
+      response_format: 'wav',
+      speed: 1,
+    }
+  } else if (ctx.endpointType === 'openai-video') {
+    payload = {
+      model: ctx.modelName,
+      prompt: 'A serene koi pond at sunset, cinematic style.',
+      size: '1280x720',
+      seconds: 5,
+      response_format: 'url',
+      num_inference_steps: 30,
+      seed: -1,
+      guidance_scale: 7.5,
+      guidance_scale_2: 7.5,
+      fps: 24,
+    }
+  } else {
+    payload = {
+      model: ctx.modelName,
+      prompt: 'A serene koi pond at sunset, ukiyo-e style.',
+      size: '1024x1024',
+      n: 1,
+      response_format: 'url',
+      num_inference_steps: 30,
+      seed: -1,
+      cfg: 7.5,
+    }
+  }
+  const body = JSON.stringify(payload, null, 2)
 
   if (lang === 'curl') {
-    const body = JSON.stringify(
-      { model: ctx.modelName, prompt, size: '1024x1024', n: 1 },
-      null,
-      2
-    )
     return [
+      ...(isRecognition
+        ? [`audio_base64=$(base64 < audio.wav | tr -d '\\n')`, '']
+        : []),
       `curl ${url} \\`,
       `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      ...(isSpeech ? ['  --output speech.wav \\'] : []),
+      ...(isRecognition
+        ? [
+            `  --data-binary @- <<EOF`,
+            body.replace(audioPlaceholder, '${audio_base64}'),
+            'EOF',
+          ]
+        : [`  -d '${body.replaceAll('\n', '\n     ')}'`]),
     ].join('\n')
   }
   if (lang === 'python') {
     return [
-      'from openai import OpenAI',
+      ...(isRecognition ? ['import base64'] : []),
+      'import json',
+      'import os',
+      ...(isRecognition || isSpeech ? ['from pathlib import Path'] : []),
+      'import requests',
       '',
-      `client = OpenAI(base_url="${ctx.baseUrl}/v1", api_key="<YOUR_API_KEY>")`,
+      `payload = json.loads(r'''${body}''')`,
+      ...(isRecognition
+        ? [
+            'audio_base64 = base64.b64encode(Path("audio.wav").read_bytes()).decode("ascii")',
+            'payload["messages"][0]["content"][1]["input_audio"]["data"] = audio_base64',
+          ]
+        : []),
       '',
-      'response = client.images.generate(',
-      `    model="${ctx.modelName}",`,
-      `    prompt="${prompt}",`,
-      `    size="1024x1024",`,
-      `    n=1,`,
+      'response = requests.post(',
+      `    "${url}",`,
+      `    headers={"Authorization": f"Bearer {os.environ['${ctx.apiKeyEnv}']}"},`,
+      '    json=payload,',
       ')',
+      'response.raise_for_status()',
       '',
-      'print(response.data[0].url)',
-    ].join('\n')
-  }
-  if (lang === 'typescript') {
-    return [
-      `import OpenAI from 'openai'`,
-      '',
-      `const client = new OpenAI({`,
-      `  baseURL: '${ctx.baseUrl}/v1',`,
-      `  apiKey: process.env.${ctx.apiKeyEnv},`,
-      `})`,
-      '',
-      `const response = await client.images.generate({`,
-      `  model: '${ctx.modelName}',`,
-      `  prompt: '${prompt}',`,
-      `  size: '1024x1024',`,
-      `  n: 1,`,
-      `})`,
-      '',
-      `console.log(response.data[0].url)`,
+      isSpeech
+        ? 'Path("speech.wav").write_bytes(response.content)'
+        : 'print(response.json())',
     ].join('\n')
   }
   return [
+    ...(isRecognition
+      ? [
+          `import { readFileSync } from 'node:fs'`,
+          '',
+          `const audioBase64 = readFileSync('audio.wav').toString('base64')`,
+          '',
+        ]
+      : []),
+    ...(isSpeech ? [`import { writeFileSync } from 'node:fs'`, ''] : []),
     `const response = await fetch('${url}', {`,
     `  method: 'POST',`,
     `  headers: {`,
     `    Authorization: \`Bearer \${process.env.${ctx.apiKeyEnv}}\`,`,
     `    'Content-Type': 'application/json',`,
     `  },`,
-    `  body: JSON.stringify({`,
-    `    model: '${ctx.modelName}',`,
-    `    prompt: '${prompt}',`,
-    `    size: '1024x1024',`,
-    `    n: 1,`,
-    `  }),`,
+    `  body: JSON.stringify(${body.replace(JSON.stringify(audioPlaceholder), 'audioBase64')}),`,
     `})`,
+    `if (!response.ok) throw new Error(await response.text())`,
     '',
-    `const data = await response.json()`,
-    `console.log(data.data[0].url)`,
+    ...(isSpeech
+      ? [
+          `writeFileSync('speech.wav', Buffer.from(await response.arrayBuffer()))`,
+        ]
+      : [`const data = await response.json()`, `console.log(data)`]),
   ].join('\n')
 }
 
@@ -430,9 +501,19 @@ function buildSample(
 ): string {
   if (endpointType === 'anthropic') return buildAnthropicSample(lang, ctx)
   if (endpointType === 'gemini') return buildGeminiSample(lang, ctx)
-  if (endpointType === 'embeddings' || endpointType === 'jina-rerank')
+  if (endpointType === 'embeddings' || endpointType === 'jina-rerank') {
     return buildEmbeddingSample(lang, ctx)
-  if (endpointType === 'image-generation') return buildImageSample(lang, ctx)
+  }
+  if (
+    [
+      'image-generation',
+      'openai-video',
+      'speech-recognition',
+      'openai-speech',
+    ].includes(endpointType)
+  ) {
+    return buildMediaSample(lang, ctx)
+  }
   return buildChatSample(lang, ctx)
 }
 
@@ -443,6 +524,8 @@ function buildSample(
 function CodeSamplesSection(props: {
   model: PricingModel
   endpointMap: Record<string, { path?: string; method?: string }>
+  endpointType: string
+  onEndpointTypeChange: (endpointType: string) => void
 }) {
   const { t } = useTranslation()
   const { status } = useStatus()
@@ -474,14 +557,11 @@ function CodeSamplesSection(props: {
       .filter((e) => Boolean(e.path))
   }, [props.model, props.endpointMap])
 
-  const [endpointType, setEndpointType] = useState<string>(
-    endpoints[0]?.type ?? ''
-  )
   const [lang, setLang] = useState<Lang>('curl')
 
   const activeEndpoint = useMemo(() => {
-    return endpoints.find((e) => e.type === endpointType) ?? endpoints[0]
-  }, [endpointType, endpoints])
+    return endpoints.find((e) => e.type === props.endpointType) ?? endpoints[0]
+  }, [props.endpointType, endpoints])
 
   if (endpoints.length === 0 || !activeEndpoint) {
     return null
@@ -501,15 +581,19 @@ function CodeSamplesSection(props: {
 
       <div className='flex flex-wrap items-center gap-2'>
         {endpoints.length > 1 && (
-          <Tabs value={endpointType} onValueChange={setEndpointType}>
-            <TabsList className='bg-muted/40 h-8 p-0.5'>
+          <Tabs
+            value={activeEndpoint.type}
+            onValueChange={props.onEndpointTypeChange}
+            className='max-w-full min-w-0'
+          >
+            <TabsList className='bg-muted/40 h-auto max-w-full flex-wrap p-0.5'>
               {endpoints.map((ep) => (
                 <TabsTrigger
                   key={ep.type}
                   value={ep.type}
                   className='h-7 px-2.5 text-xs'
                 >
-                  {ep.type}
+                  {getEndpointTemplateLabel(t, ep.type)}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -552,11 +636,14 @@ function CodeSamplesSection(props: {
 // Supported parameters table
 // ---------------------------------------------------------------------------
 
-function SupportedParametersSection(props: { model: PricingModel }) {
+function SupportedParametersSection(props: {
+  model: PricingModel
+  endpointType: string
+}) {
   const { t } = useTranslation()
   const params = useMemo(
-    () => buildSupportedParameters(props.model),
-    [props.model]
+    () => buildSupportedParameters(props.model, props.endpointType),
+    [props.model, props.endpointType]
   )
 
   if (params.length === 0) return null
@@ -665,6 +752,7 @@ function ParamRangeCell(props: { param: SupportedParameter }) {
 // Rate-limits table
 // ---------------------------------------------------------------------------
 
+/*
 function RateLimitsSection(props: { model: PricingModel }) {
   const { t } = useTranslation()
   const limits = useMemo(() => buildRateLimits(props.model), [props.model])
@@ -719,6 +807,7 @@ function RateLimitsSection(props: { model: PricingModel }) {
     </section>
   )
 }
+*/
 
 // ---------------------------------------------------------------------------
 // Authentication preview
@@ -762,12 +851,28 @@ export function ModelDetailsApi(props: {
   model: PricingModel
   endpointMap: Record<string, { path?: string; method?: string }>
 }) {
+  const [endpointType, setEndpointType] = useState('')
+  const endpoints = (props.model.supported_endpoint_types ?? []).filter(
+    (type) => Boolean(props.endpointMap[type]?.path)
+  )
+  const activeEndpointType = endpoints.includes(endpointType)
+    ? endpointType
+    : (endpoints[0] ?? '')
+
   return (
     <div className='space-y-6'>
-      <CodeSamplesSection model={props.model} endpointMap={props.endpointMap} />
+      <CodeSamplesSection
+        model={props.model}
+        endpointMap={props.endpointMap}
+        endpointType={activeEndpointType}
+        onEndpointTypeChange={setEndpointType}
+      />
       <AuthSection />
-      <SupportedParametersSection model={props.model} />
-      <RateLimitsSection model={props.model} />
+      <SupportedParametersSection
+        model={props.model}
+        endpointType={activeEndpointType}
+      />
+      {/* <RateLimitsSection model={props.model} /> */}
     </div>
   )
 }

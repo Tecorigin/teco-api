@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type TFunction } from 'i18next'
+import type { TFunction } from 'i18next'
 
 import type { NameRule, ModelStatus, SyncSource } from './types'
 
@@ -166,7 +166,28 @@ export const ENDPOINT_TEMPLATES: Record<
   gemini: { path: '/v1beta/models/{model}:generateContent', method: 'POST' },
   'jina-rerank': { path: '/rerank', method: 'POST' },
   'image-generation': { path: '/v1/images/generations', method: 'POST' },
+  'openai-video': { path: '/v1/videos/generations', method: 'POST' },
+  'speech-recognition': { path: '/v1/chat/completions', method: 'POST' },
+  'openai-speech': { path: '/v1/audio/speech', method: 'POST' },
   embeddings: { path: '/v1/embeddings', method: 'POST' },
+}
+
+export function getEndpointTemplateLabel(
+  t: TFunction,
+  endpointType: string
+): string {
+  switch (endpointType) {
+    case 'image-generation':
+      return t('Text-to-Image')
+    case 'openai-video':
+      return t('Text to Video')
+    case 'speech-recognition':
+      return t('Speech Recognition')
+    case 'openai-speech':
+      return t('Speech Synthesis')
+    default:
+      return endpointType
+  }
 }
 
 // ============================================================================
