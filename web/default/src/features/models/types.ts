@@ -37,6 +37,19 @@ export interface Model {
   id: number
   model_name: string
   description?: string
+  max_input_tokens?: number | null
+  max_output_tokens?: number | null
+  context_length?: number | null
+  rpm?: number | null
+  tpm?: number | null
+  show_actual_rate_limits?: boolean
+  input_modalities?: ModelModality[]
+  output_modalities?: ModelModality[]
+  filing_region?: string
+  filing_model_name?: string
+  filing_organization?: string
+  filing_number?: string
+  filing_date?: string
   icon?: string
   tags?: string
   vendor_id?: number
@@ -53,6 +66,8 @@ export interface Model {
   matched_models?: string[]
   matched_count?: number
 }
+
+export type ModelModality = 'text' | 'image' | 'audio' | 'video'
 
 /**
  * Vendor entity from API

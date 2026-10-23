@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, Loader2 } from 'lucide-react'
+import { ChevronDown, Image, Loader2, Mic, Type, Video } from 'lucide-react'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -72,6 +72,12 @@ import {
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import {
   useSystemOptions,
   getOptionValue,
@@ -84,13 +90,26 @@ import { safeJsonParse } from '@/features/system-settings/utils/json-parser'
 import { createModel, updateModel, getModel, getVendors } from '../../api'
 import { getNameRuleOptions, ENDPOINT_TEMPLATES } from '../../constants'
 import { modelsQueryKeys, vendorsQueryKeys, parseModelTags } from '../../lib'
-import type { Model } from '../../types'
+import type { Model, ModelModality } from '../../types'
 
 // Extended schema for ratio configuration (internal form state only)
 const extendedModelFormSchema = z.object({
   id: z.number().optional(),
   model_name: z.string().min(1, 'Model name is required'),
   description: z.string(),
+  max_input_tokens: z.number().int().min(1).max(2147483647).nullable(),
+  max_output_tokens: z.number().int().min(1).max(2147483647).nullable(),
+  context_length: z.number().int().min(1).max(2147483647).nullable(),
+  rpm: z.number().int().min(0).max(2147483647).nullable(),
+  tpm: z.number().int().min(0).max(2147483647).nullable(),
+  show_actual_rate_limits: z.boolean(),
+  input_modalities: z.array(z.enum(['text', 'image', 'audio', 'video'])),
+  output_modalities: z.array(z.enum(['text', 'image', 'audio', 'video'])),
+  filing_region: z.string().trim(),
+  filing_model_name: z.string().trim(),
+  filing_organization: z.string().trim(),
+  filing_number: z.string().trim(),
+  filing_date: z.string().trim(),
   icon: z.string(),
   tags: z.array(z.string()),
   vendor_id: z.number().optional(),
@@ -112,7 +131,35 @@ type ExtendedModelFormValues = z.infer<typeof extendedModelFormSchema>
 type PricingMode = 'per-token' | 'per-request'
 type PricingSubMode = 'ratio' | 'price'
 
-const TAG_QUICK_ACTIONS = ['文生图', '文生视频', '语音识别', '语音合成'] as const
+const TAG_QUICK_ACTIONS = [
+  { tag: '文生图', input: 'text', output: 'image' },
+  { tag: '文生视频', input: 'text', output: 'video' },
+  { tag: '语音识别', input: 'audio', output: 'text' },
+  { tag: '语音合成', input: 'text', output: 'audio' },
+] as const
+
+const CATALOG_DEFAULTS = {
+  max_input_tokens: null,
+  max_output_tokens: null,
+  context_length: null,
+  rpm: null,
+  tpm: null,
+  show_actual_rate_limits: false,
+  input_modalities: [] as ModelModality[],
+  output_modalities: [] as ModelModality[],
+  filing_region: '',
+  filing_model_name: '',
+  filing_organization: '',
+  filing_number: '',
+  filing_date: '',
+}
+
+const MODALITY_OPTIONS = [
+  { value: 'text', label: 'Text', icon: Type },
+  { value: 'image', label: 'Image', icon: Image },
+  { value: 'audio', label: 'Audio', icon: Mic },
+  { value: 'video', label: 'Video', icon: Video },
+] as const
 
 type ModelMutateDrawerProps = {
   open: boolean
@@ -230,6 +277,7 @@ export function ModelMutateDrawer({
   const form = useForm<ExtendedModelFormValues>({
     resolver: zodResolver(extendedModelFormSchema),
     defaultValues: {
+      ...CATALOG_DEFAULTS,
       model_name: '',
       description: '',
       icon: '',
@@ -281,17 +329,53 @@ export function ModelMutateDrawer({
     }
   }
 
-  const appendTag = useCallback(
-    (tag: string) => {
+  const handleTagsChange = useCallback(
+    (tags: string[]) => {
       const currentTags = form.getValues('tags') || []
-      if (currentTags.includes(tag)) {
-        return
-      }
-      form.setValue('tags', [...currentTags, tag], {
+      const nextTags = [...new Set(tags)]
+      const addedPresets = TAG_QUICK_ACTIONS.filter(
+        (preset) =>
+          nextTags.includes(preset.tag) && !currentTags.includes(preset.tag)
+      )
+      const removedPresets = TAG_QUICK_ACTIONS.filter(
+        (preset) =>
+          currentTags.includes(preset.tag) && !nextTags.includes(preset.tag)
+      )
+      const remainingPresets = TAG_QUICK_ACTIONS.filter((preset) =>
+        nextTags.includes(preset.tag)
+      )
+      const updateOptions = {
         shouldDirty: true,
         shouldTouch: true,
         shouldValidate: true,
-      })
+      }
+      form.setValue('tags', nextTags, updateOptions)
+      for (const [field, direction] of [
+        ['input_modalities', 'input'],
+        ['output_modalities', 'output'],
+      ] as const) {
+        const currentModalities = form.getValues(field)
+        const removedModalities = new Set<ModelModality>(
+          removedPresets.map((preset) => preset[direction])
+        )
+        const requiredModalities = new Set<ModelModality>(
+          remainingPresets.map((preset) => preset[direction])
+        )
+        const nextModalities = currentModalities.filter(
+          (modality) =>
+            !removedModalities.has(modality) || requiredModalities.has(modality)
+        )
+        form.setValue(
+          field,
+          [
+            ...new Set([
+              ...nextModalities,
+              ...addedPresets.map((preset) => preset[direction]),
+            ]),
+          ],
+          updateOptions
+        )
+      }
     },
     [form]
   )
@@ -307,6 +391,19 @@ export function ModelMutateDrawer({
         id: model.id,
         model_name: model.model_name,
         description: model.description || '',
+        max_input_tokens: model.max_input_tokens ?? null,
+        max_output_tokens: model.max_output_tokens ?? null,
+        context_length: model.context_length ?? null,
+        rpm: model.rpm ?? null,
+        tpm: model.tpm ?? null,
+        show_actual_rate_limits: model.show_actual_rate_limits ?? false,
+        input_modalities: model.input_modalities ?? [],
+        output_modalities: model.output_modalities ?? [],
+        filing_region: model.filing_region ?? '',
+        filing_model_name: model.filing_model_name ?? '',
+        filing_organization: model.filing_organization ?? '',
+        filing_number: model.filing_number ?? '',
+        filing_date: model.filing_date ?? '',
         icon: model.icon || '',
         tags: parseModelTags(model.tags),
         vendor_id: model.vendor_id,
@@ -409,6 +506,7 @@ export function ModelMutateDrawer({
       setCompletionPrice('')
       setAdvancedOpen(false)
       form.reset({
+        ...CATALOG_DEFAULTS,
         model_name: currentRow?.model_name || '',
         description: '',
         icon: '',
@@ -646,6 +744,8 @@ export function ModelMutateDrawer({
               : 'Model created successfully'
           )
           queryClient.invalidateQueries({ queryKey: modelsQueryKeys.lists() })
+          queryClient.invalidateQueries({ queryKey: ['pricing'] })
+          queryClient.invalidateQueries({ queryKey: ['pricing-rate-limits'] })
           queryClient.invalidateQueries({ queryKey: ['system-options'] })
           onOpenChange(false)
         } else {
@@ -735,7 +835,9 @@ export function ModelMutateDrawer({
                     <FormLabel>{t('Description')}</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder={t('Describe this model...')}
+                        placeholder={t(
+                          'Describe this model... Supports Markdown.'
+                        )}
                         rows={3}
                         {...field}
                       />
@@ -744,6 +846,104 @@ export function ModelMutateDrawer({
                   </FormItem>
                 )}
               />
+
+              <div className='space-y-3 border-t pt-4'>
+                <h4 className='text-sm font-medium'>{t('Context')}</h4>
+                <div className='grid gap-3 sm:grid-cols-3'>
+                  {(
+                    [
+                      { name: 'max_input_tokens', label: 'Max input' },
+                      { name: 'max_output_tokens', label: 'Max output' },
+                      { name: 'context_length', label: 'Context window' },
+                    ] as const
+                  ).map((config) => (
+                    <FormField
+                      key={config.name}
+                      control={form.control}
+                      name={config.name}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t(config.label)}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type='number'
+                              min={1}
+                              max={2147483647}
+                              step={1}
+                              placeholder={t('Not set')}
+                              {...field}
+                              value={field.value ?? ''}
+                              onChange={(event) =>
+                                field.onChange(
+                                  event.target.value === ''
+                                    ? null
+                                    : Number(event.target.value)
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className='space-y-3 border-t pt-4'>
+                <h4 className='text-sm font-medium'>
+                  {t('Model rate limits')}
+                </h4>
+                <FormField
+                  control={form.control}
+                  name='show_actual_rate_limits'
+                  render={({ field }) => (
+                    <FormItem className='flex items-center justify-between gap-3'>
+                      <FormLabel>{t('Show actual rate limits')}</FormLabel>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <div className='grid grid-cols-2 gap-3'>
+                  {(['rpm', 'tpm'] as const).map((name) => (
+                    <FormField
+                      key={name}
+                      control={form.control}
+                      name={name}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{name.toUpperCase()}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type='number'
+                              min={0}
+                              max={2147483647}
+                              step={1}
+                              placeholder={t('Not set')}
+                              {...field}
+                              disabled={form.watch('show_actual_rate_limits')}
+                              value={field.value ?? ''}
+                              onChange={(event) =>
+                                field.onChange(
+                                  event.target.value === ''
+                                    ? null
+                                    : Number(event.target.value)
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
 
               <FormField
                 control={form.control}
@@ -815,20 +1015,25 @@ export function ModelMutateDrawer({
                     <FormControl>
                       <TagInput
                         value={field.value || []}
-                        onChange={field.onChange}
+                        onChange={handleTagsChange}
                         placeholder={t('Add tags...')}
                       />
                     </FormControl>
                     <div className='flex flex-wrap gap-2'>
-                      {TAG_QUICK_ACTIONS.map((tag) => (
+                      {TAG_QUICK_ACTIONS.map((preset) => (
                         <Button
-                          key={tag}
+                          key={preset.tag}
                           type='button'
                           variant='outline'
                           size='sm'
-                          onClick={() => appendTag(tag)}
+                          onClick={() =>
+                            handleTagsChange([
+                              ...form.getValues('tags'),
+                              preset.tag,
+                            ])
+                          }
                         >
-                          {tag}
+                          {preset.tag}
                         </Button>
                       ))}
                     </div>
@@ -839,6 +1044,100 @@ export function ModelMutateDrawer({
                   </FormItem>
                 )}
               />
+
+              <div className='space-y-3 border-t pt-4'>
+                <h4 className='text-sm font-medium'>{t('Modalities')}</h4>
+                <div className='grid gap-3 sm:grid-cols-2'>
+                  {(
+                    [
+                      { name: 'input_modalities', label: 'Input' },
+                      { name: 'output_modalities', label: 'Output' },
+                    ] as const
+                  ).map((config) => (
+                    <FormField
+                      key={config.name}
+                      control={form.control}
+                      name={config.name}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t(config.label)}</FormLabel>
+                          <FormControl>
+                            <ToggleGroup
+                              multiple
+                              variant='outline'
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              aria-label={t(config.label)}
+                            >
+                              {MODALITY_OPTIONS.map((option) => {
+                                const Icon = option.icon
+                                return (
+                                  <Tooltip key={option.value}>
+                                    <TooltipTrigger
+                                      render={
+                                        <ToggleGroupItem
+                                          value={option.value}
+                                          aria-label={t(option.label)}
+                                          className='aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/90 aria-pressed:hover:text-primary-foreground size-9 p-0'
+                                        />
+                                      }
+                                    >
+                                      <Icon className='size-4' />
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      {t(option.label)}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )
+                              })}
+                            </ToggleGroup>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
+            </SideDrawerSection>
+
+            <SideDrawerSection>
+              <h3 className='text-sm font-semibold'>{t('Model filing')}</h3>
+              <div className='grid gap-4 sm:grid-cols-2'>
+                {(
+                  [
+                    { name: 'filing_region', label: 'Filing jurisdiction' },
+                    { name: 'filing_model_name', label: 'Filed model name' },
+                    {
+                      name: 'filing_organization',
+                      label: 'Filing organization',
+                    },
+                    { name: 'filing_number', label: 'Filing number' },
+                    { name: 'filing_date', label: 'Filing date' },
+                  ] as const
+                ).map((config) => (
+                  <FormField
+                    key={config.name}
+                    control={form.control}
+                    name={config.name}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t(config.label)}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type={
+                              config.name === 'filing_date' ? 'date' : 'text'
+                            }
+                            placeholder={t('Not set')}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+              </div>
             </SideDrawerSection>
 
             {/* Matching Configuration */}

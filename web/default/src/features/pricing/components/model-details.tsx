@@ -24,11 +24,16 @@ import {
   Code2,
   FileText,
   HeartPulse,
+  Image,
   Info,
   Layers,
   Maximize2,
+  Mic,
+  RefreshCw,
   Sparkles,
   Timer,
+  Type,
+  Video,
 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -39,6 +44,7 @@ import { sideDrawerContentClassName } from '@/components/drawer-layout'
 import { GroupBadge } from '@/components/group-badge'
 import { PublicLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
+import { Markdown } from '@/components/ui/markdown'
 import {
   Sheet,
   SheetContent,
@@ -48,6 +54,11 @@ import {
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { getPerfMetrics } from '@/features/performance-metrics/api'
 import {
   formatLatency,
@@ -57,7 +68,9 @@ import {
 } from '@/features/performance-metrics/lib/format'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
 
+import { getPricingRateLimits } from '../api'
 import { DEFAULT_TOKEN_UNIT, QUOTA_TYPE_VALUES } from '../constants'
 import { usePricingData } from '../hooks/use-pricing-data'
 import {
@@ -112,6 +125,17 @@ const MODALITY_LABEL_KEYS: Record<string, string> = {
   audio: 'Audio',
   video: 'Video',
   file: 'File',
+}
+
+const MODALITY_ICONS: Record<
+  string,
+  React.ComponentType<{ className?: string }>
+> = {
+  text: Type,
+  image: Image,
+  audio: Mic,
+  video: Video,
+  file: FileText,
 }
 
 const TOKEN_FORMAT = new Intl.NumberFormat(undefined, {
@@ -267,12 +291,29 @@ function ModalityLabels(props: { items: string[] }) {
   if (props.items.length === 0) return null
 
   return (
-    <span className='inline-flex items-center gap-1 align-middle'>
-      {props.items.map((item) => (
-        <span key={item} className='font-medium'>
-          {t(MODALITY_LABEL_KEYS[item] ?? item)}
-        </span>
-      ))}
+    <span className='inline-flex flex-wrap items-center gap-2 align-middle'>
+      {props.items.map((item) => {
+        const Icon = MODALITY_ICONS[item]
+        const label = t(MODALITY_LABEL_KEYS[item] ?? item)
+        if (!Icon) return <span key={item}>{label}</span>
+        return (
+          <Tooltip key={item}>
+            <TooltipTrigger
+              render={
+                <span
+                  tabIndex={0}
+                  role='img'
+                  aria-label={label}
+                  className='inline-flex size-6 items-center justify-center'
+                />
+              }
+            >
+              <Icon className='size-4' />
+            </TooltipTrigger>
+            <TooltipContent>{label}</TooltipContent>
+          </Tooltip>
+        )
+      })}
     </span>
   )
 }
@@ -280,9 +321,8 @@ function ModalityLabels(props: { items: string[] }) {
 function ModelBackendQuickStats(props: { model: PricingModel }) {
   const { t } = useTranslation()
   const model = props.model
-  const inputModalities = normalizeCatalogItems(model.input_modalities)
-  const outputModalities = normalizeCatalogItems(model.output_modalities)
   const contextLength = model.context_length ?? 0
+  const maxInput = model.max_input_tokens ?? 0
   const maxOutput = model.max_output_tokens ?? 0
   const knowledgeCutoff = formatCatalogYearMonth(model.knowledge_cutoff)
   const releaseDate = formatCatalogYearMonth(model.release_date)
@@ -299,9 +339,17 @@ function ModelBackendQuickStats(props: { model: PricingModel }) {
     stats.push({
       key: 'context',
       icon: Layers,
-      label: t('Context'),
+      label: t('Context window'),
       value: formatCatalogTokenCount(contextLength),
-      hint: t('Maximum input window'),
+    })
+  }
+
+  if (maxInput > 0) {
+    stats.push({
+      key: 'max-input',
+      icon: FileText,
+      label: t('Max input'),
+      value: formatCatalogTokenCount(maxInput),
     })
   }
 
@@ -312,23 +360,6 @@ function ModelBackendQuickStats(props: { model: PricingModel }) {
       label: t('Max output'),
       value: formatCatalogTokenCount(maxOutput),
       hint: t('Maximum tokens per response'),
-    })
-  }
-
-  if (inputModalities.length > 0 || outputModalities.length > 0) {
-    stats.push({
-      key: 'modalities',
-      icon: FileText,
-      label: t('Modalities'),
-      value: (
-        <span className='inline-flex items-center gap-1'>
-          <ModalityLabels items={inputModalities} />
-          {inputModalities.length > 0 && outputModalities.length > 0 && (
-            <span className='text-muted-foreground/40'>→</span>
-          )}
-          <ModalityLabels items={outputModalities} />
-        </span>
-      ),
     })
   }
 
@@ -380,6 +411,89 @@ function ModelBackendQuickStats(props: { model: PricingModel }) {
   )
 }
 
+function ModelRateLimitsSection(props: { model: PricingModel }) {
+  const { t } = useTranslation()
+  const user = useAuthStore((state) => state.auth.user)
+  const showActual = props.model.show_actual_rate_limits ?? false
+  const limitsQuery = useQuery({
+    queryKey: [
+      'pricing-rate-limits',
+      user?.id,
+      user?.group,
+      props.model.model_name,
+    ],
+    queryFn: () => getPricingRateLimits(props.model.model_name),
+    enabled: showActual && Boolean(user),
+    staleTime: 60 * 1000,
+  })
+  if (!showActual && props.model.rpm == null && props.model.tpm == null)
+    return null
+
+  const limits = showActual ? limitsQuery.data : props.model
+  let content: React.ReactNode
+  if (showActual && !user) {
+    content = (
+      <p className='text-muted-foreground text-sm'>
+        {t('Sign in to view actual rate limits')}
+      </p>
+    )
+  } else if (showActual && limitsQuery.isError) {
+    content = (
+      <div className='flex items-center gap-2 text-sm'>
+        <span className='text-destructive'>
+          {t('Failed to load rate limits')}
+        </span>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant='ghost'
+                size='icon'
+                aria-label={t('Retry')}
+                onClick={() => void limitsQuery.refetch()}
+              />
+            }
+          >
+            <RefreshCw className='size-4' />
+          </TooltipTrigger>
+          <TooltipContent>{t('Retry')}</TooltipContent>
+        </Tooltip>
+      </div>
+    )
+  } else {
+    content = (
+      <div className='grid grid-cols-2 divide-x rounded-lg border'>
+        {(['rpm', 'tpm'] as const).map((field) => {
+          const value = limits?.[field]
+          let label = t('Not set')
+          if (value === 0) label = t('Unlimited')
+          else if (value != null) label = formatCatalogTokenCount(value)
+          return (
+            <div key={field} className='min-w-0 px-3 py-2.5'>
+              <div className='text-muted-foreground text-xs'>
+                {field.toUpperCase()}
+              </div>
+              {showActual && limitsQuery.isPending ? (
+                <Skeleton className='mt-1 h-5 w-20' />
+              ) : (
+                <div className='mt-1 text-sm font-semibold tabular-nums'>
+                  {label}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+  return (
+    <section>
+      <SectionTitle>{t('Model rate limits')}</SectionTitle>
+      {content}
+    </section>
+  )
+}
+
 function ModelBackendSignalsSection(props: { model: PricingModel }) {
   const { t } = useTranslation()
   const capabilities = normalizeCatalogItems(props.model.capabilities)
@@ -399,8 +513,8 @@ function ModelBackendSignalsSection(props: { model: PricingModel }) {
       <SectionTitle>
         {t('Capabilities')} / {t('Supported modalities')}
       </SectionTitle>
-      <div className='grid gap-3 rounded-xl border p-3 @2xl/details:grid-cols-[minmax(0,1.5fr)_minmax(260px,1fr)]'>
-        {capabilities.length > 0 ? (
+      <div className='grid gap-3'>
+        {capabilities.length > 0 && (
           <CatalogPillList
             items={capabilities.map((capability) =>
               t(
@@ -409,13 +523,11 @@ function ModelBackendSignalsSection(props: { model: PricingModel }) {
               )
             )}
           />
-        ) : (
-          <div />
         )}
         {(inputModalities.length > 0 || outputModalities.length > 0) && (
           <div className='grid gap-2 sm:grid-cols-2'>
             {inputModalities.length > 0 && (
-              <div className='flex items-center justify-between gap-3 rounded-lg border px-3 py-2'>
+              <div className='flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2'>
                 <span className='text-muted-foreground text-xs font-medium'>
                   {t('Input')}
                 </span>
@@ -425,7 +537,7 @@ function ModelBackendSignalsSection(props: { model: PricingModel }) {
               </div>
             )}
             {outputModalities.length > 0 && (
-              <div className='flex items-center justify-between gap-3 rounded-lg border px-3 py-2'>
+              <div className='flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2'>
                 <span className='text-muted-foreground text-xs font-medium'>
                   {t('Output')}
                 </span>
@@ -511,12 +623,62 @@ function ModelBackendProviderSection(props: { model: PricingModel }) {
   )
 }
 
+function ModelFilingSection(props: { model: PricingModel }) {
+  const { t } = useTranslation()
+  const fields = [
+    {
+      key: 'region',
+      label: t('Filing jurisdiction'),
+      value: props.model.filing_region?.trim(),
+    },
+    {
+      key: 'model',
+      label: t('Filed model name'),
+      value: props.model.filing_model_name?.trim(),
+    },
+    {
+      key: 'organization',
+      label: t('Filing organization'),
+      value: props.model.filing_organization?.trim(),
+    },
+    {
+      key: 'number',
+      label: t('Filing number'),
+      value: props.model.filing_number?.trim(),
+    },
+    {
+      key: 'date',
+      label: t('Filing date'),
+      value: props.model.filing_date?.trim(),
+    },
+  ].filter((field) => Boolean(field.value))
+
+  if (fields.length === 0) return null
+
+  return (
+    <section>
+      <SectionTitle>{t('Model filing')}</SectionTitle>
+      <div className='border-border/60 bg-border/60 grid grid-cols-1 gap-px overflow-hidden rounded-lg border sm:grid-cols-2'>
+        {fields.map((field) => (
+          <CatalogInfoCell key={field.key} label={field.label}>
+            <span className='text-foreground min-w-0 text-sm font-semibold [overflow-wrap:anywhere]'>
+              {field.value}
+            </span>
+          </CatalogInfoCell>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function ModelBackendDetailsSection(props: { model: PricingModel }) {
   return (
     <>
       <ModelBackendQuickStats model={props.model} />
+      <ModelRateLimitsSection model={props.model} />
       <ModelBackendSignalsSection model={props.model} />
       <ModelBackendProviderSection model={props.model} />
+      <ModelFilingSection model={props.model} />
     </>
   )
 }
@@ -574,9 +736,9 @@ function ModelHeader(props: { model: PricingModel }) {
         )}
       </div>
       {description && (
-        <p className='text-muted-foreground mt-2 text-sm leading-relaxed'>
+        <Markdown className='text-muted-foreground mt-2 text-sm leading-relaxed'>
           {description}
-        </p>
+        </Markdown>
       )}
     </header>
   )
@@ -1128,7 +1290,8 @@ function GroupPricingSection(props: {
   )
 }
 
-const TAB_VALUES = ['overview', 'performance', 'api'] as const
+// const TAB_VALUES = ['overview', 'performance', 'api'] as const
+const TAB_VALUES = ['overview', 'api'] as const
 type TabValue = (typeof TAB_VALUES)[number]
 
 const TAB_META: Record<
@@ -1136,7 +1299,7 @@ const TAB_META: Record<
   { icon: React.ComponentType<{ className?: string }>; labelKey: string }
 > = {
   overview: { icon: Info, labelKey: 'Overview' },
-  performance: { icon: HeartPulse, labelKey: 'Performance' },
+  // performance: { icon: HeartPulse, labelKey: 'Performance' },
   api: { icon: Code2, labelKey: 'API' },
 }
 
@@ -1165,7 +1328,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
       <ModelHeader model={props.model} />
 
       <Tabs defaultValue='overview' className='gap-4'>
-        <TabsList className='bg-muted/60 grid w-full grid-cols-3 gap-1 rounded-lg p-1 group-data-horizontal/tabs:h-auto'>
+        <TabsList className='bg-muted/60 grid w-full grid-cols-2 gap-1 rounded-lg p-1 group-data-horizontal/tabs:h-auto'>
           {TAB_VALUES.map((value) => {
             const Icon = TAB_META[value].icon
             return (
@@ -1182,7 +1345,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
         </TabsList>
 
         <TabsContent value='overview' className='space-y-6 outline-none'>
-          <OverviewSummaryGrid model={props.model} />
+          {/* <OverviewSummaryGrid model={props.model} /> */}
 
           <section className='bg-card/60 space-y-5 rounded-xl border p-4 shadow-sm'>
             <SectionTitle>{t('Pricing')}</SectionTitle>
@@ -1196,7 +1359,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
             {isDynamic && (
               <DynamicPricingBreakdown billingExpr={props.model.billing_expr} />
             )}
-            <GroupPricingSection
+            {/* <GroupPricingSection
               model={props.model}
               groupRatio={props.groupRatio}
               usableGroup={props.usableGroup}
@@ -1205,7 +1368,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
               usdExchangeRate={props.usdExchangeRate}
               tokenUnit={props.tokenUnit}
               showRechargePrice={showRechargePrice}
-            />
+            /> */}
           </section>
 
           <ModelBackendDetailsSection model={props.model} />

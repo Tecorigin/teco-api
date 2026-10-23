@@ -37,6 +37,7 @@ func SetApiRouter(router *gin.Engine) {
 		//apiRouter.GET("/midjourney", controller.GetMidjourney)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
 		apiRouter.GET("/pricing", middleware.HeaderNavModuleAuth("pricing"), controller.GetPricing)
+		apiRouter.GET("/pricing/rate-limits", middleware.UserAuth(), middleware.HeaderNavModuleAuth("pricing"), controller.GetPricingRateLimits)
 		apiRouter.GET("/perf-metrics/summary/prometheus", controller.GetPerfMetricsSummaryPrometheus)
 		perfMetricsRoute := apiRouter.Group("/perf-metrics")
 		perfMetricsRoute.Use(middleware.HeaderNavModulePublicOrUserAuth("pricing"))
@@ -222,6 +223,7 @@ func SetApiRouter(router *gin.Engine) {
 		userRateLimitRoute := apiRouter.Group("/user_rate_limit")
 		userRateLimitRoute.Use(middleware.AdminAuth())
 		{
+			userRateLimitRoute.GET("/models", controller.GetUserRateLimitModels)
 			userRateLimitRoute.GET("/", controller.GetUserRateLimits)
 			userRateLimitRoute.POST("/", controller.CreateUserRateLimit)
 			userRateLimitRoute.PUT("/:id", controller.UpdateUserRateLimit)

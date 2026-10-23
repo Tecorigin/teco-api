@@ -1,6 +1,9 @@
 package controller
 
 import (
+	"net/http"
+	"strings"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
@@ -31,6 +34,41 @@ func filterPricingByUsableGroups(pricing []model.Pricing, usableGroup map[string
 		}
 	}
 	return filtered
+}
+
+func GetPricingRateLimits(c *gin.Context) {
+	modelName := strings.TrimSpace(c.Query("model"))
+	if modelName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Model name is required"})
+		return
+	}
+	user, err := model.GetUserCache(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pricing := filterPricingByUsableGroups(model.GetPricing(), service.GetUserUsableGroups(user.Group))
+	available := false
+	for _, entry := range pricing {
+		if entry.ModelName == modelName && entry.ShowActualRateLimits {
+			available = true
+			break
+		}
+	}
+	if !available {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Model not found"})
+		return
+	}
+	limit, err := model.GetEffectiveUserRateLimit(user.Id, user.Group, modelName)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	var rpm, tpm int64
+	if limit != nil {
+		rpm, tpm = limit.RPM, limit.TPM
+	}
+	common.ApiSuccess(c, gin.H{"rpm": rpm, "tpm": tpm})
 }
 
 func GetPricing(c *gin.Context) {

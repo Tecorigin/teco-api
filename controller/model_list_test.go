@@ -34,6 +34,116 @@ type userModelsResponse struct {
 	Data    []string `json:"data"`
 }
 
+func TestPricingCatalogAndEffectiveRateLimits(t *testing.T) {
+	database := setupModelListControllerTestDB(t)
+	require.NoError(t, database.AutoMigrate(&model.UserRateLimit{}))
+	model.InvalidatePricingCache()
+	t.Cleanup(model.InvalidatePricingCache)
+	input, output, context, rpm := 32000, 8000, 40000, 999
+	entry := model.Model{ModelName: "catalog-test", Status: 1, ModelCatalog: model.ModelCatalog{
+		MaxInputTokens: &input, MaxOutputTokens: &output, ContextLength: &context, RPM: &rpm,
+		ShowActualRateLimits: true, InputModalities: []string{"text", "image"}, OutputModalities: []string{"audio"},
+		FilingRegion: "Shanghai", FilingModelName: "Filed model", FilingOrganization: "Example organization",
+		FilingNumber: "FILING-2026-001", FilingDate: "2026-10-23",
+	}}
+	require.NoError(t, entry.Insert())
+	require.NoError(t, database.Create(&model.Channel{Id: 1, Name: "catalog", Type: constant.ChannelTypeOpenAI, Key: "test", Status: common.ChannelStatusEnabled}).Error)
+	require.NoError(t, database.Create(&model.Ability{ChannelId: 1, Model: entry.ModelName, Group: "catalog-group", Enabled: true}).Error)
+	for _, user := range []model.User{
+		{Id: 1001, Username: "catalog-alice", AffCode: "cat-alice", Group: "catalog-group", Status: common.UserStatusEnabled},
+		{Id: 1002, Username: "catalog-bob", AffCode: "cat-bob", Group: "catalog-group", Status: common.UserStatusEnabled},
+	} {
+		require.NoError(t, database.Create(&user).Error)
+	}
+	pricings := pricingByModelName(model.GetPricing())
+	require.Contains(t, pricings, entry.ModelName)
+	assert.Equal(t, entry.ModelCatalog, pricings[entry.ModelName].ModelCatalog)
+	rules := []*model.UserRateLimit{
+		{Scope: model.RateLimitScopeGlobal, RPM: 10, TPM: 100},
+		{Scope: model.RateLimitScopeGroup, GroupName: "catalog-group", RPM: 20, TPM: 200},
+		{Scope: model.RateLimitScopeUser, UserId: 1001, RPM: 30, TPM: 300},
+		{Scope: model.RateLimitScopeModel, ModelName: entry.ModelName, RPM: 25, TPM: 250},
+		{Scope: model.RateLimitScopeGroupModel, GroupName: "catalog-group", ModelName: entry.ModelName, RPM: 35, TPM: 350},
+		{Scope: model.RateLimitScopeUserModel, UserId: 1001, ModelName: entry.ModelName, RPM: 40, TPM: 0},
+	}
+	for _, rule := range rules {
+		require.NoError(t, model.UpsertUserRateLimit(rule))
+	}
+	for _, test := range []struct {
+		name   string
+		userID int
+		remove *model.UserRateLimit
+		rpm    int64
+		tpm    int64
+	}{
+		{"user model", 1001, nil, 40, 0},
+		{"other user", 1002, nil, 35, 350},
+		{"group model fallback", 1001, rules[5], 35, 350},
+		{"model fallback", 1001, rules[4], 25, 250},
+		{"user fallback", 1001, rules[3], 30, 300},
+		{"group fallback", 1001, rules[2], 20, 200},
+		{"global fallback", 1001, rules[1], 10, 100},
+		{"no rule", 1001, rules[0], 0, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if test.remove != nil {
+				require.NoError(t, model.DeleteUserRateLimit(test.remove.Id))
+			}
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+			ctx.Set("id", test.userID)
+			ctx.Request = httptest.NewRequest(http.MethodGet, "/api/pricing/rate-limits?model=catalog-test", nil)
+			GetPricingRateLimits(ctx)
+			require.Equal(t, http.StatusOK, recorder.Code)
+			var payload struct {
+				Success bool `json:"success"`
+				Data    struct {
+					RPM int64 `json:"rpm"`
+					TPM int64 `json:"tpm"`
+				} `json:"data"`
+			}
+			require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+			require.True(t, payload.Success)
+			assert.Equal(t, test.rpm, payload.Data.RPM)
+			assert.Equal(t, test.tpm, payload.Data.TPM)
+		})
+	}
+	entry.ShowActualRateLimits = false
+	require.NoError(t, entry.Update())
+	model.InvalidatePricingCache()
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", 1001)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/pricing/rate-limits?model=catalog-test", nil)
+	GetPricingRateLimits(ctx)
+	assert.Equal(t, http.StatusNotFound, recorder.Code)
+}
+
+func TestUserRateLimitModelsIncludesAllGroups(t *testing.T) {
+	database := setupModelListControllerTestDB(t)
+	for _, ability := range []model.Ability{
+		{Group: "default", Model: "default-model", ChannelId: 1, Enabled: true},
+		{Group: "private", Model: "private-model", ChannelId: 2, Enabled: true},
+		{Group: "other", Model: "default-model", ChannelId: 3, Enabled: true},
+		{Group: "default", Model: "disabled-model", ChannelId: 4, Enabled: true},
+	} {
+		require.NoError(t, database.Create(&ability).Error)
+	}
+	require.NoError(t, database.Model(&model.Ability{}).Where("model = ?", "disabled-model").Update("enabled", false).Error)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/user_rate_limit/models", nil)
+	GetUserRateLimitModels(ctx)
+	var response struct {
+		Success bool     `json:"success"`
+		Data    []string `json:"data"`
+	}
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success)
+	assert.ElementsMatch(t, []string{"default-model", "private-model"}, response.Data)
+}
+
 func setupModelListControllerTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 

@@ -14,12 +14,14 @@ import (
 )
 
 const (
-	RateLimitScopeGlobal    = "global"
-	RateLimitScopeGroup     = "group"
-	RateLimitScopeUser      = "user"
-	RateLimitScopeUserModel = "user_model"
-	RateLimitTypeRPM        = "rpm"
-	RateLimitTypeTPM        = "tpm"
+	RateLimitScopeGlobal     = "global"
+	RateLimitScopeGroup      = "group"
+	RateLimitScopeUser       = "user"
+	RateLimitScopeModel      = "model"
+	RateLimitScopeGroupModel = "group_model"
+	RateLimitScopeUserModel  = "user_model"
+	RateLimitTypeRPM         = "rpm"
+	RateLimitTypeTPM         = "tpm"
 )
 
 type UserRateLimit struct {
@@ -145,6 +147,19 @@ func normalizeUserRateLimit(limit *UserRateLimit) error {
 			return errors.New("user_id and model_name are required")
 		}
 		limit.GroupName = ""
+	case RateLimitScopeModel:
+		if limit.ModelName == "" {
+			return errors.New("model_name is required")
+		}
+		limit.UserId = 0
+		limit.Username = ""
+		limit.GroupName = ""
+	case RateLimitScopeGroupModel:
+		if limit.GroupName == "" || limit.ModelName == "" {
+			return errors.New("group_name and model_name are required")
+		}
+		limit.UserId = 0
+		limit.Username = ""
 	default:
 		return errors.New("invalid rate limit scope")
 	}
@@ -239,43 +254,35 @@ func UpdateUserRateLimit(id int, limit *UserRateLimit) error {
 	return DB.Save(&existing).Error
 }
 
-// GetEffectiveUserRateLimit returns the most-specific matching configuration.
+// GetEffectiveUserRateLimit returns the highest-priority matching configuration.
 func GetEffectiveUserRateLimit(userId int, groupName, modelName string) (*UserRateLimit, error) {
 	modelName = normalizeModelName(modelName)
 	groupName = strings.TrimSpace(groupName)
-	queries := []struct {
-		scope string
-		args  []interface{}
-	}{
-		{RateLimitScopeUserModel, []interface{}{userId, modelName}},
-		{RateLimitScopeUser, []interface{}{userId}},
-		{RateLimitScopeGroup, []interface{}{groupName}},
-		{RateLimitScopeGlobal, nil},
+	query := DB.Where("scope = ? AND user_id = 0 AND group_name = '' AND model_name = ''", RateLimitScopeGlobal)
+	if groupName != "" {
+		query = query.Or("scope = ? AND user_id = 0 AND group_name = ? AND model_name = ''", RateLimitScopeGroup, groupName)
 	}
-	for _, query := range queries {
-		if (query.scope == RateLimitScopeUserModel && (userId <= 0 || modelName == "")) || (query.scope == RateLimitScopeGroup && groupName == "") {
-			continue
+	if userId > 0 {
+		query = query.Or("scope = ? AND user_id = ? AND group_name = '' AND model_name = ''", RateLimitScopeUser, userId)
+	}
+	if modelName != "" {
+		query = query.Or("scope = ? AND user_id = 0 AND group_name = '' AND model_name = ?", RateLimitScopeModel, modelName)
+		if groupName != "" {
+			query = query.Or("scope = ? AND user_id = 0 AND group_name = ? AND model_name = ?", RateLimitScopeGroupModel, groupName, modelName)
 		}
-		var limit UserRateLimit
-		var err error
-		switch query.scope {
-		case RateLimitScopeUserModel:
-			err = DB.Where("scope = ? AND user_id = ? AND model_name = ?", query.scope, query.args[0], query.args[1]).First(&limit).Error
-		case RateLimitScopeUser:
-			err = DB.Where("scope = ? AND user_id = ?", query.scope, query.args[0]).First(&limit).Error
-		case RateLimitScopeGroup:
-			err = DB.Where("scope = ? AND group_name = ?", query.scope, query.args[0]).First(&limit).Error
-		default:
-			err = DB.Where("scope = ?", query.scope).First(&limit).Error
-		}
-		if err == nil {
-			return &limit, nil
-		}
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, err
+		if userId > 0 {
+			query = query.Or("scope = ? AND user_id = ? AND group_name = '' AND model_name = ?", RateLimitScopeUserModel, userId, modelName)
 		}
 	}
-	return nil, nil
+	var limit UserRateLimit
+	err := query.Order("CASE scope WHEN 'user_model' THEN 0 WHEN 'group_model' THEN 1 WHEN 'model' THEN 2 WHEN 'user' THEN 3 WHEN 'group' THEN 4 WHEN 'global' THEN 5 END").First(&limit).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &limit, nil
 }
 
 // AllowUserRateLimit atomically reserves one request and its estimated tokens

@@ -413,6 +413,49 @@ for (const [key, values] of Object.entries(routingLabels)) {
     }
 }
 
+const catalogLabels = {
+    'Describe this model... Supports Markdown.': ['Describe this model... Supports Markdown.', '描述此模型... 支持 Markdown。', 'Décrivez ce modèle... Markdown pris en charge.', 'このモデルを説明... Markdown 対応。', 'Опишите модель... Поддерживается Markdown.', 'Mô tả mô hình... Hỗ trợ Markdown.', '描述此模型... 支援 Markdown。'],
+    'Max input': ['Max input', '最大输入', 'Entrée maximale', '最大入力', 'Максимальный ввод', 'Đầu vào tối đa', '最大輸入'],
+    'Context window': ['Context window', '上下文窗口', 'Fenêtre de contexte', 'コンテキストウィンドウ', 'Контекстное окно', 'Cửa sổ ngữ cảnh', '上下文視窗'],
+    'Model rate limits': ['Model rate limits', '模型限流', 'Limites du modèle', 'モデルのレート制限', 'Лимиты модели', 'Giới hạn mô hình', '模型限流'],
+    'Show actual rate limits': ['Show actual rate limits', '显示实际配置', 'Afficher les limites effectives', '実際の制限を表示', 'Показать действующие лимиты', 'Hiển thị giới hạn thực tế', '顯示實際設定'],
+    'Sign in to view actual rate limits': ['Sign in to view actual rate limits', '登录后查看实际限流配置', 'Connectez-vous pour voir vos limites effectives', 'ログインして実際の制限を確認', 'Войдите, чтобы увидеть действующие лимиты', 'Đăng nhập để xem giới hạn thực tế', '登入後查看實際限流設定'],
+    'Failed to load rate limits': ['Failed to load rate limits', '限流配置加载失败', 'Échec du chargement des limites', 'レート制限の読み込みに失敗しました', 'Не удалось загрузить лимиты', 'Không thể tải giới hạn', '限流設定載入失敗'],
+}
+for (const [key, values] of Object.entries(catalogLabels)) {
+    for (const [index, locale] of ['en', 'zh', 'fr', 'ja', 'ru', 'vi', 'zh-TW'].entries()) {
+        newKeys[locale][key] = values[index]
+    }
+}
+const filingLabels = {
+    'Model filing': ['Model filing', '模型备案', 'Enregistrement du modèle', 'モデル届出', 'Регистрация модели', 'Đăng ký mô hình', '模型備案'],
+    'Filing jurisdiction': ['Filing jurisdiction', '属地', 'Juridiction', '管轄地域', 'Юрисдикция', 'Địa bàn', '屬地'],
+    'Filed model name': ['Filed model name', '模型名称', 'Nom du modèle enregistré', '届出モデル名', 'Зарегистрированное имя модели', 'Tên mô hình đăng ký', '模型名稱'],
+    'Filing organization': ['Filing organization', '备案单位', 'Organisme déclarant', '届出組織', 'Регистрирующая организация', 'Đơn vị đăng ký', '備案單位'],
+    'Filing number': ['Filing number', '备案号', 'Numéro d’enregistrement', '届出番号', 'Регистрационный номер', 'Số đăng ký', '備案號'],
+    'Filing date': ['Filing date', '备案时间', 'Date d’enregistrement', '届出日', 'Дата регистрации', 'Ngày đăng ký', '備案時間'],
+}
+for (const [key, values] of Object.entries(filingLabels)) {
+    for (const [index, locale] of ['en', 'zh', 'fr', 'ja', 'ru', 'vi', 'zh-TW'].entries()) {
+        newKeys[locale][key] = values[index]
+    }
+}
+const rateLimitScopeLabels = {
+    'User group and model': ['User group and model', '用户组与模型', 'Groupe d’utilisateurs et modèle', 'ユーザーグループとモデル', 'Группа пользователей и модель', 'Nhóm người dùng và mô hình', '使用者群組與模型'],
+}
+for (const [key, values] of Object.entries(rateLimitScopeLabels)) {
+    for (const [index, locale] of ['en', 'zh', 'fr', 'ja', 'ru', 'vi', 'zh-TW'].entries()) {
+        newKeys[locale][key] = values[index]
+    }
+}
+let selectedKeys = process.argv.includes('--model-catalog') ? new Set(Object.keys(catalogLabels)) : null
+if (process.argv.includes('--model-filing')) {
+    selectedKeys = new Set(Object.keys(filingLabels))
+}
+if (process.argv.includes('--rate-limit-scopes')) {
+    selectedKeys = new Set(Object.keys(rateLimitScopeLabels))
+}
+
 async function main() {
     let totalAdded = 0
 
@@ -422,6 +465,7 @@ async function main() {
 
         let count = 0
         for (const [key, value] of Object.entries(trans)) {
+            if (selectedKeys && !selectedKeys.has(key)) continue
             if (!Object.prototype.hasOwnProperty.call(json.translation, key)) {
                 json.translation[key] = value
                 count++

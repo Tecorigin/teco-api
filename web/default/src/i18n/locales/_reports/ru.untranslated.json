@@ -1,5 +1,4 @@
 {
-  "接口": "Endpoint",
   "Advanced settings": "Advanced settings",
   "Clear current task": "Clear current task",
   "Clear history": "Clear history",
@@ -91,5 +90,6 @@
   "View and manage your API usage logs": "查看和管理您的 API 使用日志",
   "View detailed input, output, and cache token usage by model": "查看各模型输入、输出及缓存 Token 使用明细",
   "Zoom in": "Zoom in",
-  "Zoom out": "Zoom out"
+  "Zoom out": "Zoom out",
+  "接口": "Endpoint"
 }

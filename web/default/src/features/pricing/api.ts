@@ -29,3 +29,17 @@ export async function getPricing(): Promise<PricingData> {
   const res = await api.get('/api/pricing')
   return res.data
 }
+
+export async function getPricingRateLimits(
+  model: string
+): Promise<{ rpm: number; tpm: number }> {
+  const res = await api.get<{
+    success: boolean
+    message?: string
+    data: { rpm: number; tpm: number }
+  }>('/api/pricing/rate-limits', { params: { model } })
+  if (!res.data.success) {
+    throw new Error(res.data.message || 'Failed to load rate limits')
+  }
+  return res.data.data
+}

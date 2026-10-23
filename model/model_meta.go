@@ -22,6 +22,7 @@ type BoundChannel struct {
 }
 
 type Model struct {
+	ModelCatalog
 	Id           int            `json:"id"`
 	ModelName    string         `json:"model_name" gorm:"size:128;not null;uniqueIndex:uk_model_name_delete_at,priority:1"`
 	Description  string         `json:"description,omitempty" gorm:"type:text"`
@@ -45,6 +46,9 @@ type Model struct {
 }
 
 func (mi *Model) Insert() error {
+	if err := mi.ModelCatalog.Validate(); err != nil {
+		return err
+	}
 	now := common.GetTimestamp()
 	mi.CreatedTime = now
 	mi.UpdatedTime = now
@@ -75,10 +79,15 @@ func IsModelNameDuplicated(id int, name string) (bool, error) {
 }
 
 func (mi *Model) Update() error {
+	if err := mi.ModelCatalog.Validate(); err != nil {
+		return err
+	}
 	mi.UpdatedTime = common.GetTimestamp()
 	// 使用 Select 强制更新所有字段，包括零值
 	return DB.Model(&Model{}).Where("id = ?", mi.Id).
-		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "name_rule", "updated_time").
+		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "name_rule", "updated_time",
+			"max_input_tokens", "max_output_tokens", "context_length", "rpm", "tpm", "show_actual_rate_limits", "input_modalities", "output_modalities",
+			"filing_region", "filing_model_name", "filing_organization", "filing_number", "filing_date").
 		Updates(mi).Error
 }
 

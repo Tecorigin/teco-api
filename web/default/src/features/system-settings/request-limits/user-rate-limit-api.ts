@@ -1,7 +1,13 @@
-import { api, getUserModels } from '@/lib/api'
 import { getGroups, getUsers } from '@/features/users/api'
+import { api } from '@/lib/api'
 
-export type UserRateLimitScope = 'global' | 'group' | 'user' | 'user_model'
+export type UserRateLimitScope =
+  | 'global'
+  | 'group'
+  | 'user'
+  | 'model'
+  | 'group_model'
+  | 'user_model'
 
 export type UserRateLimit = {
   id: number
@@ -22,7 +28,10 @@ export async function getUserRateLimits(): Promise<UserRateLimit[]> {
   return response.data.data.items ?? []
 }
 
-export async function saveUserRateLimit(payload: UserRateLimitPayload, id?: number) {
+export async function saveUserRateLimit(
+  payload: UserRateLimitPayload,
+  id?: number
+) {
   const response = id
     ? await api.put(`/api/user_rate_limit/${id}`, payload)
     : await api.post('/api/user_rate_limit', payload)
@@ -47,7 +56,12 @@ export async function getRateLimitGroups() {
   return response.data ?? []
 }
 
-export async function getRateLimitModels() {
-  const response = await getUserModels()
-  return response.data ?? []
+export async function getRateLimitModels(): Promise<string[]> {
+  const response = await api.get<{
+    success: boolean
+    message?: string
+    data?: string[]
+  }>('/api/user_rate_limit/models')
+  if (!response.data.success) throw new Error(response.data.message)
+  return response.data.data ?? []
 }

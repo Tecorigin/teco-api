@@ -39,6 +39,15 @@ func GetUserRateLimits(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": gin.H{"items": limits, "total": total}})
 }
 
+func GetUserRateLimitModels(c *gin.Context) {
+	models := make([]string, 0)
+	if err := model.DB.Model(&model.Ability{}).Where("enabled = ?", true).Distinct("model").Order("model").Pluck("model", &models).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, models)
+}
+
 func CreateUserRateLimit(c *gin.Context) {
 	var req userRateLimitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
