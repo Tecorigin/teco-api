@@ -338,6 +338,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
+		relayInfo.UpstreamRequestId = ""
+		relayInfo.UpstreamRequestSource = ""
+		c.Set(common.UpstreamRequestIdKey, "")
+		c.Set("upstream_request_id", "")
+		c.Set("upstream_request_id_source", "")
+
 		attemptStartedAt := time.Now().Unix()
 		slaAttempts++
 		switch relayFormat {

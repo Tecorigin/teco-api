@@ -165,7 +165,7 @@ function DetailTextBlock(props: { text: string; copyValue?: string }) {
         )}
       </Button>
       <div className='min-w-0 pr-6'>
-        <pre className='bg-background/70 max-h-64 overflow-auto rounded-md border p-2 text-xs leading-5 whitespace-pre-wrap break-words font-mono'>
+        <pre className='bg-background/70 max-h-64 overflow-auto rounded-md border p-2 font-mono text-xs leading-5 break-words whitespace-pre-wrap'>
           {props.text}
         </pre>
       </div>
@@ -212,13 +212,14 @@ function BillingBreakdown(props: {
         })
       }
       for (const entry of tieredSummary.priceEntries) {
-        const unit = entry.priceUnit === 'per-second'
-          ? '/s'
-          : entry.priceUnit === 'per-image'
-            ? '/image'
-             : entry.priceUnit === 'per-ten-thousand-characters'
-               ? '/10k-characters'
-            : '/M'
+        let unit = '/M'
+        if (entry.priceUnit === 'per-second') {
+          unit = '/s'
+        } else if (entry.priceUnit === 'per-image') {
+          unit = '/image'
+        } else if (entry.priceUnit === 'per-ten-thousand-characters') {
+          unit = '/10k-characters'
+        }
         rows.push({
           label: t(entry.shortLabel),
           value: `${fmtPrice(entry.price)}${unit}`,
@@ -262,6 +263,21 @@ function BillingBreakdown(props: {
       label: isUserGR ? t('User Exclusive Ratio') : t('Group Ratio'),
       value: `${formatRatio(effectiveGR)}x`,
     })
+  }
+
+  if (!isPerCall) {
+    if (other.group_input_ratio != null && other.group_input_ratio !== 1) {
+      rows.push({
+        label: t('Input coefficient'),
+        value: `${formatRatio(other.group_input_ratio)}x`,
+      })
+    }
+    if (other.group_output_ratio != null && other.group_output_ratio !== 1) {
+      rows.push({
+        label: t('Output coefficient'),
+        value: `${formatRatio(other.group_output_ratio)}x`,
+      })
+    }
   }
 
   if (!isTieredExpr && isClaude && hasAnyCacheTokens(other)) {
@@ -372,8 +388,8 @@ function BillingBreakdown(props: {
 
   return (
     <DetailSection label={t('Billing Details')}>
-      {rows.map((row, idx) => (
-        <DetailRow key={idx} label={row.label} value={row.value} mono />
+      {rows.map((row) => (
+        <DetailRow key={row.label} label={row.label} value={row.value} mono />
       ))}
     </DetailSection>
   )
@@ -438,11 +454,16 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
 
   return (
     <DetailSection label={t('Token Breakdown')}>
-      {rows.map((row, idx) => (
-        <DetailRow key={idx} label={row.label} value={row.value} mono />
+      {rows.map((row) => (
+        <DetailRow key={row.label} label={row.label} value={row.value} mono />
       ))}
     </DetailSection>
   )
+}
+
+const reasoningBadgeVariants: Record<string, 'orange' | 'yellow' | 'green'> = {
+  high: 'orange',
+  medium: 'yellow',
 }
 
 interface DetailsDialogProps {
@@ -457,6 +478,8 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const { copiedText, copyToClipboard } = useCopyToClipboard({ notify: false })
   const details = props.log.content ?? ''
   const other = parseLogOther(props.log.other)
+  const upstreamRequestId =
+    props.log.upstream_request_id || other?.upstream_request_id
   const typeConfig = getLogTypeConfig(props.log.type)
 
   const isViolation = isViolationFeeLog(other)
@@ -618,10 +641,10 @@ export function DetailsDialog(props: DetailsDialogProps) {
               mono
             />
           )}
-          {props.log.upstream_request_id && (
+          {upstreamRequestId && (
             <DetailRow
               label={t('Upstream Request ID')}
-              value={props.log.upstream_request_id}
+              value={upstreamRequestId}
               mono
             />
           )}
@@ -854,9 +877,9 @@ export function DetailsDialog(props: DetailsDialogProps) {
             icon={<ShieldCheck className='size-3.5' aria-hidden='true' />}
             label={t('Top-up Audit Info')}
           >
-            {topupAuditFields.map((field, idx) => (
+            {topupAuditFields.map((field) => (
               <DetailRow
-                key={idx}
+                key={field.label}
                 label={field.label}
                 value={field.value}
                 mono
@@ -943,9 +966,9 @@ export function DetailsDialog(props: DetailsDialogProps) {
             {operationText != null && (
               <DetailRow label={t('Operation')} value={operationText} />
             )}
-            {loginAuditFields.map((field, idx) => (
+            {loginAuditFields.map((field) => (
               <DetailRow
-                key={idx}
+                key={field.label}
                 label={field.label}
                 value={field.value}
                 mono
@@ -999,11 +1022,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
               <StatusBadge
                 label={other.reasoning_effort}
                 variant={
-                  other.reasoning_effort === 'high'
-                    ? 'orange'
-                    : other.reasoning_effort === 'medium'
-                      ? 'yellow'
-                      : 'green'
+                  reasoningBadgeVariants[other.reasoning_effort] ?? 'green'
                 }
                 size='sm'
                 copyable={false}
@@ -1190,12 +1209,12 @@ export function DetailsDialog(props: DetailsDialogProps) {
             icon={<Settings2 className='size-3.5' aria-hidden='true' />}
             label={`${t('Param Override')} (${other.po.length})`}
           >
-            {other.po.filter(Boolean).map((line, idx) => {
+            {other.po.filter(Boolean).map((line) => {
               const parsed = parseAuditLine(line)
               if (!parsed) return null
               return (
                 <div
-                  key={idx}
+                  key={line}
                   className='bg-background/60 flex min-w-0 flex-col gap-1.5 rounded border p-2 sm:flex-row sm:items-start sm:gap-2'
                 >
                   <StatusBadge

@@ -39,6 +39,8 @@ type textQuotaSummary struct {
 	ImageRatio               float64
 	ModelRatio               float64
 	GroupRatio               float64
+	GroupInputRatio          float64
+	GroupOutputRatio         float64
 	ModelPrice               float64
 	CacheCreationRatio       float64
 	CacheCreationRatio5m     float64
@@ -185,6 +187,8 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		ImageRatio:           relayInfo.PriceData.ImageRatio,
 		ModelRatio:           relayInfo.PriceData.ModelRatio,
 		GroupRatio:           relayInfo.PriceData.GroupRatioInfo.GroupRatio,
+		GroupInputRatio:      1,
+		GroupOutputRatio:     1,
 		ModelPrice:           relayInfo.PriceData.ModelPrice,
 		CacheCreationRatio:   relayInfo.PriceData.CacheCreationRatio,
 		CacheCreationRatio5m: relayInfo.PriceData.CacheCreation5mRatio,
@@ -210,6 +214,14 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	summary.CacheCreationTokens1h = usage.ClaudeCacheCreation1hTokens
 	summary.ImageTokens = usage.PromptTokensDetails.ImageTokens
 	summary.AudioTokens = usage.PromptTokensDetails.AudioTokens
+	if !relayInfo.PriceData.UsePrice && relayInfo.TieredBillingSnapshot == nil && summary.ImageTokens == 0 && summary.AudioTokens == 0 && usage.CompletionTokenDetails.AudioTokens == 0 && usage.CompletionTokenDetails.ImageTokens == 0 && !ctx.GetBool("image_generation_call") {
+		if relayInfo.PriceData.GroupInputRatio != nil {
+			summary.GroupInputRatio = *relayInfo.PriceData.GroupInputRatio
+		}
+		if relayInfo.PriceData.GroupOutputRatio != nil {
+			summary.GroupOutputRatio = *relayInfo.PriceData.GroupOutputRatio
+		}
+	}
 	legacyClaudeDerived := isLegacyClaudeDerivedOpenAIUsage(relayInfo, usage)
 	isOpenRouterClaudeBilling := relayInfo.ChannelMeta != nil &&
 		relayInfo.ChannelType == constant.ChannelTypeOpenRouter &&
@@ -291,14 +303,14 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 			}
 		}
 
-		promptQuota := baseTokens.Add(cachedTokensWithRatio).Add(imageTokensWithRatio).Add(cachedCreationTokensWithRatio)
-		completionQuota := dCompletionTokens.Mul(dCompletionRatio)
+		promptQuota := baseTokens.Add(cachedTokensWithRatio).Add(cachedCreationTokensWithRatio).Mul(decimal.NewFromFloat(summary.GroupInputRatio)).Add(imageTokensWithRatio)
+		completionQuota := dCompletionTokens.Mul(dCompletionRatio).Mul(decimal.NewFromFloat(summary.GroupOutputRatio))
 		quotaCalculateDecimal := promptQuota.Add(completionQuota).Mul(ratio)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(summary.ToolCallSurchargeQuota)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)
 		quotaCalculateDecimal = relayInfo.PriceData.ApplyOtherRatiosToDecimal(quotaCalculateDecimal)
 
-		if !ratio.IsZero() && quotaCalculateDecimal.LessThanOrEqual(decimal.Zero) {
+		if !ratio.IsZero() && (summary.GroupInputRatio != 0 || summary.GroupOutputRatio != 0) && quotaCalculateDecimal.LessThanOrEqual(decimal.Zero) {
 			quotaCalculateDecimal = decimal.NewFromInt(1)
 		}
 		quota, clamp := common.QuotaFromDecimalChecked(quotaCalculateDecimal)
@@ -316,7 +328,7 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 
 	if summary.TotalTokens == 0 {
 		summary.Quota = 0
-	} else if !ratio.IsZero() && summary.Quota == 0 {
+	} else if !ratio.IsZero() && (summary.GroupInputRatio != 0 || summary.GroupOutputRatio != 0) && summary.Quota == 0 {
 		summary.Quota = 1
 	}
 
@@ -412,6 +424,10 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		other["usage_semantic"] = "anthropic"
 	} else {
 		other = GenerateTextOtherInfo(ctx, relayInfo, summary.ModelRatio, summary.GroupRatio, summary.CompletionRatio, summary.CacheTokens, summary.CacheRatio, summary.ModelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
+	}
+	if !tieredBillingApplied && !relayInfo.PriceData.UsePrice {
+		other["group_input_ratio"] = summary.GroupInputRatio
+		other["group_output_ratio"] = summary.GroupOutputRatio
 	}
 	if promptFinal := buildAuditPromptFinal(ctx, relayInfo); promptFinal != "" {
 		other["audit_prompt"] = promptFinal

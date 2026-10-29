@@ -5447,7 +5447,10 @@
     "请选择或创建一个知识库": "Выберите или создайте базу знаний",
     "输入问题，Enter 发送，Shift+Enter 换行": "Введите вопрос. Enter — отправить, Shift+Enter — новая строка",
     "问答失败": "Ошибка ответа",
-    "问答接口返回 SSE。stream 为 true 时返回 OpenAI 风格的 chat.completion.chunk 事件；stream 为 false 时返回单个 OpenAI 风格 JSON 响应。return_docs 为 true 时会返回参考来源。": "Q&A возвращает SSE. stream=true возвращает события OpenAI, stream=false — JSON. return_docs=true включает источники."
+    "问答接口返回 SSE。stream 为 true 时返回 OpenAI 风格的 chat.completion.chunk 事件；stream 为 false 时返回单个 OpenAI 风格 JSON 响应。return_docs 为 true 时会返回参考来源。": "Q&A возвращает SSE. stream=true возвращает события OpenAI, stream=false — JSON. return_docs=true включает источники.",
+    "Input coefficient": "Коэффициент ввода",
+    "Output coefficient": "Коэффициент вывода",
+    "Expected a JSON object of non-negative group coefficients": "Ожидается JSON-объект с группами и неотрицательными коэффициентами"
   },
   "Model Usage Limits": "Model Usage Limits",
   "Configure per-user and per-model usage limits (daily/weekly/monthly) and view violation records.": "Configure per-user and per-model usage limits (daily/weekly/monthly) and view violation records.",

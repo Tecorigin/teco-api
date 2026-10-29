@@ -215,6 +215,7 @@ export function buildApiParams(config: {
     ...(searchParams.upstreamRequestId
       ? { upstream_request_id: String(searchParams.upstreamRequestId) }
       : {}),
+    ...(searchParams.streamError === '1' ? { stream_error: 1 } : {}),
     ...buildTimeRangeParams(searchParams, false),
   }
 

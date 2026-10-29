@@ -8,7 +8,7 @@ The expression is the billing contract between the administrator and the system.
 
 ### Core Principles
 
-1. **Expression is self-contained** — The expression string alone determines billing. No external ratio tables, no implicit completion multipliers, no hidden conversion factors. Given the same token counts and request context, the same expression always produces the same cost.
+1. **Expression defines the base prices** — The expression string determines base billing without model ratio tables or implicit completion multipliers. Optional group input/output coefficients adjust the corresponding price terms, and the overall group ratio applies afterwards. These group settings are frozen in the request's billing snapshot; identical tokens, request context, expression and frozen group settings produce the same charge.
 
 2. **Variables are opt-in** — `p` (prompt) and `c` (completion) are the base. Cache (`cr`, `cc`, `cc1h`), image (`img`), and audio (`ai`, `ao`) variables are optional. If omitted, those tokens are included in `p`/`c` and priced at their rate. The system automatically detects which variables the expression uses (via AST introspection) and adjusts token normalization accordingly.
 
@@ -133,6 +133,39 @@ of `img_o`, which remains the upstream-reported image output **token** count.
 `tts_c` applies only to `/v1/audio/speech`. The gateway counts the request's
 UTF-8 characters before pre-consume and reuses that frozen count at settlement.
 
+### Group Input and Output Coefficients
+
+`GroupInputRatio` adjusts the expression's `p`, `cr`, `cc` and `cc1h` price
+terms. `GroupOutputRatio` adjusts its `c` price terms. Missing coefficients
+default to `1`, and an explicit `0` makes the corresponding text/cache terms
+free. This applies even when the expression also contains media prices.
+
+For example, with input coefficient `0.5` and output coefficient `0.8`:
+
+```
+source: tier("base", p * 2 + c * 8 + img * 2.5 + img_o * 1)
+priced: tier("base", p * 2 * 0.5 + c * 8 * 0.8 + img * 2.5 + img_o * 1)
+```
+
+Explicit `img`, `img_o`, `ai`, `ao`, `asr_s`, `img_n`, `vid_s` and `tts_c`
+prices are unchanged. If a media variable is omitted, its tokens remain in
+the existing `p`/`c` fallback and follow that fallback's coefficient.
+
+The transformation uses the expression AST, changes price terms rather than
+token quantities, and preserves conditional predicates such as `len > 200000`
+or `p > 200000`. Shared scalar multipliers continue to apply to every price
+term. Fixed charges without token variables are unchanged. Terms combining
+multiple token sides nonlinearly (for example `p * c`) cannot be separated
+unambiguously and are rejected when non-default coefficients are configured;
+write independent input, output and media price terms instead.
+
+Pre-consume and settlement use the same transformation and frozen coefficients.
+Legacy snapshots without coefficient fields retain `1/1` behavior. The log
+keeps the original base expression in `expr_b64` and records the effective
+coefficients in `group_input_ratio` and `group_output_ratio`. The overall
+group ratio still multiplies the resulting expression cost once; tool
+surcharges retain their existing overall-group-only multiplier.
+
 ### Request Rules (appended after `|||`)
 
 Request-conditional multipliers are appended to the expression after a `|||` separator:
@@ -182,9 +215,9 @@ On save, the expression is validated:
 When a request arrives and the model uses `tiered_expr` billing:
 1. Loads expression from `billing_setting.GetBillingExpr()`
 2. Builds `RequestInput` (headers + body) for `param()` / `header()` functions
-3. Runs expression with estimated tokens: `RunExprWithRequest(expr, {P, C}, requestInput)`
+3. Applies the selected group's input/output coefficients to price terms, then runs the adjusted expression with estimated tokens: `RunExprWithRequest(pricedExpr, {P, C}, requestInput)`
 4. Converts output to quota: `rawCost / 1,000,000 * QuotaPerUnit`
-5. Creates `BillingSnapshot` (frozen state for settlement) and stores on `RelayInfo`
+5. Creates `BillingSnapshot` (original expression plus frozen group input/output coefficients and overall ratio) and stores on `RelayInfo`
 
 ### 4. Settlement (Actual Billing)
 
@@ -199,7 +232,7 @@ After the upstream response returns with actual token usage:
 
 2. `TryTieredSettle(relayInfo, params)`:
    - Uses the frozen `BillingSnapshot` from pre-consume
-   - Re-runs the expression with actual token counts
+   - Applies the snapshot's frozen input/output coefficients to the original expression's price terms and runs it with actual token counts
    - Converts via `quotaConversion()` (version-dispatched)
    - Returns actual quota
 

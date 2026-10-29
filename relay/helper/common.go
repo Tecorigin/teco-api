@@ -22,6 +22,9 @@ var upstreamRequestIDHeaderCandidates = []string{
 	"x-request-id",
 	"request-id",
 	"x-amzn-requestid",
+	"x-amzn-request-id",
+	"x-goog-request-id",
+	common.RequestIdKey,
 	"cf-ray",
 }
 
@@ -34,8 +37,9 @@ func CaptureUpstreamRequestID(c *gin.Context, resp *http.Response, info *relayco
 		if value == "" {
 			continue
 		}
-		info.SetUpstreamRequestId(value, "header:"+key)
+		info.SetUpstreamRequestId(value, "header:"+strings.ToLower(key))
 		if c != nil {
+			c.Set(common.UpstreamRequestIdKey, info.UpstreamRequestId)
 			c.Set("upstream_request_id", info.UpstreamRequestId)
 			c.Set("upstream_request_id_source", info.UpstreamRequestSource)
 		}

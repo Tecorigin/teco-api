@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next'
 
 import { StaticDataTable } from '@/components/data-table/static/static-data-table'
 import { StaticRowActions } from '@/components/data-table/static/static-row-actions'
+import { Dialog } from '@/components/dialog'
 import {
   sideDrawerContentClassName,
   sideDrawerFormClassName,
@@ -49,7 +50,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { Dialog } from '@/components/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -72,6 +72,8 @@ import { safeJsonParse } from '../utils/json-parser'
 
 type GroupRatioVisualEditorProps = {
   groupRatio: string
+  groupInputRatio: string
+  groupOutputRatio: string
   topupGroupRatio: string
   userUsableGroups: string
   groupGroupRatio: string
@@ -84,6 +86,8 @@ type GroupPricingRow = {
   _id: string
   name: string
   ratio: string
+  inputRatio: string
+  outputRatio: string
   topupRatio: string
   selectable: boolean
   description: string
@@ -135,21 +139,29 @@ function parseNestedRatioMap(
 function buildGroupPricingRows(
   groupRatio: string,
   userUsableGroups: string,
-  topupGroupRatio: string
+  topupGroupRatio: string,
+  groupInputRatio: string,
+  groupOutputRatio: string
 ): GroupPricingRow[] {
   const ratioMap = parseRatioMap(groupRatio)
   const usableMap = parseUsableMap(userUsableGroups)
   const topupMap = parseRatioMap(topupGroupRatio)
+  const inputMap = parseRatioMap(groupInputRatio)
+  const outputMap = parseRatioMap(groupOutputRatio)
   const names = new Set([
     ...Object.keys(ratioMap),
     ...Object.keys(usableMap),
     ...Object.keys(topupMap),
+    ...Object.keys(inputMap),
+    ...Object.keys(outputMap),
   ])
 
   return [...names].map((name) => ({
     _id: createGroupPricingId(),
     name,
     ratio: String(normalizeRatio(ratioMap[name])),
+    inputRatio: String(normalizeRatio(inputMap[name])),
+    outputRatio: String(normalizeRatio(outputMap[name])),
     topupRatio: Object.hasOwn(topupMap, name) ? String(topupMap[name]) : '',
     selectable: Object.hasOwn(usableMap, name),
     description: String(usableMap[name] ?? ''),
@@ -158,6 +170,8 @@ function buildGroupPricingRows(
 
 function serializeGroupPricingRows(rows: GroupPricingRow[]) {
   const groupRatio: Record<string, number> = {}
+  const groupInputRatio: Record<string, number> = {}
+  const groupOutputRatio: Record<string, number> = {}
   const userUsableGroups: Record<string, string> = {}
   const topupGroupRatio: Record<string, number> = {}
 
@@ -165,6 +179,10 @@ function serializeGroupPricingRows(rows: GroupPricingRow[]) {
     const name = row.name.trim()
     if (!name) continue
     groupRatio[name] = normalizeRatio(row.ratio)
+    const inputRatio = normalizeRatio(row.inputRatio)
+    const outputRatio = normalizeRatio(row.outputRatio)
+    if (inputRatio !== 1) groupInputRatio[name] = inputRatio
+    if (outputRatio !== 1) groupOutputRatio[name] = outputRatio
     if (row.selectable) {
       userUsableGroups[name] = row.description
     }
@@ -176,15 +194,25 @@ function serializeGroupPricingRows(rows: GroupPricingRow[]) {
 
   return {
     GroupRatio: JSON.stringify(groupRatio, null, 2),
+    GroupInputRatio: JSON.stringify(groupInputRatio, null, 2),
+    GroupOutputRatio: JSON.stringify(groupOutputRatio, null, 2),
     UserUsableGroups: JSON.stringify(userUsableGroups, null, 2),
     TopupGroupRatio: JSON.stringify(topupGroupRatio, null, 2),
   }
+}
+
+function groupTokenRatioSignature(value: string) {
+  return Object.fromEntries(
+    Object.entries(parseRatioMap(value)).filter(([, ratio]) => ratio !== 1)
+  )
 }
 
 function groupPricingSignature(rows: GroupPricingRow[]): string {
   const serialized = serializeGroupPricingRows(rows)
   return JSON.stringify({
     groupRatio: parseRatioMap(serialized.GroupRatio),
+    groupInputRatio: groupTokenRatioSignature(serialized.GroupInputRatio),
+    groupOutputRatio: groupTokenRatioSignature(serialized.GroupOutputRatio),
     userUsableGroups: parseUsableMap(serialized.UserUsableGroups),
     topupGroupRatio: parseRatioMap(serialized.TopupGroupRatio),
   })
@@ -193,10 +221,14 @@ function groupPricingSignature(rows: GroupPricingRow[]): string {
 function sourceGroupPricingSignature(
   groupRatio: string,
   userUsableGroups: string,
-  topupGroupRatio: string
+  topupGroupRatio: string,
+  groupInputRatio: string,
+  groupOutputRatio: string
 ): string {
   return JSON.stringify({
     groupRatio: parseRatioMap(groupRatio),
+    groupInputRatio: groupTokenRatioSignature(groupInputRatio),
+    groupOutputRatio: groupTokenRatioSignature(groupOutputRatio),
     userUsableGroups: parseUsableMap(userUsableGroups),
     topupGroupRatio: parseRatioMap(topupGroupRatio),
   })
@@ -253,6 +285,8 @@ function GroupNameSelect(props: GroupNameSelectProps) {
 
 export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   groupRatio,
+  groupInputRatio,
+  groupOutputRatio,
   topupGroupRatio,
   userUsableGroups,
   groupGroupRatio,
@@ -271,12 +305,20 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
       ...Object.keys(ratioMap),
       ...Object.keys(usableMap),
       ...Object.keys(topupMap),
+      ...Object.keys(parseRatioMap(groupInputRatio)),
+      ...Object.keys(parseRatioMap(groupOutputRatio)),
     ])
     return [...names].map((name) => ({
       name,
       ratio: normalizeRatio(ratioMap[name]),
     }))
-  }, [groupRatio, userUsableGroups, topupGroupRatio])
+  }, [
+    groupRatio,
+    userUsableGroups,
+    topupGroupRatio,
+    groupInputRatio,
+    groupOutputRatio,
+  ])
 
   const registryNames = useMemo(
     () => registry.map((entry) => entry.name),
@@ -327,6 +369,8 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
     <div className='space-y-4'>
       <GroupPricingTable
         groupRatio={groupRatio}
+        groupInputRatio={groupInputRatio}
+        groupOutputRatio={groupOutputRatio}
         userUsableGroups={userUsableGroups}
         topupGroupRatio={topupGroupRatio}
         onChange={onChange}
@@ -402,6 +446,8 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
 
       <GroupDetailSheet
         groupName={detailGroup}
+        groupInputRatio={groupInputRatio}
+        groupOutputRatio={groupOutputRatio}
         onOpenChange={(open) => {
           if (!open) setDetailGroup(null)
         }}
@@ -418,6 +464,8 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
 
 type GroupPricingTableProps = {
   groupRatio: string
+  groupInputRatio: string
+  groupOutputRatio: string
   userUsableGroups: string
   topupGroupRatio: string
   onChange: (field: string, value: string) => void
@@ -426,6 +474,8 @@ type GroupPricingTableProps = {
 
 function GroupPricingTable({
   groupRatio,
+  groupInputRatio,
+  groupOutputRatio,
   userUsableGroups,
   topupGroupRatio,
   onChange,
@@ -433,14 +483,22 @@ function GroupPricingTable({
 }: GroupPricingTableProps) {
   const { t } = useTranslation()
   const [rows, setRows] = useState<GroupPricingRow[]>(() =>
-    buildGroupPricingRows(groupRatio, userUsableGroups, topupGroupRatio)
+    buildGroupPricingRows(
+      groupRatio,
+      userUsableGroups,
+      topupGroupRatio,
+      groupInputRatio,
+      groupOutputRatio
+    )
   )
 
   useEffect(() => {
     const incomingSignature = sourceGroupPricingSignature(
       groupRatio,
       userUsableGroups,
-      topupGroupRatio
+      topupGroupRatio,
+      groupInputRatio,
+      groupOutputRatio
     )
     setRows((currentRows) => {
       if (groupPricingSignature(currentRows) === incomingSignature) {
@@ -449,16 +507,26 @@ function GroupPricingTable({
       return buildGroupPricingRows(
         groupRatio,
         userUsableGroups,
-        topupGroupRatio
+        topupGroupRatio,
+        groupInputRatio,
+        groupOutputRatio
       )
     })
-  }, [groupRatio, userUsableGroups, topupGroupRatio])
+  }, [
+    groupRatio,
+    userUsableGroups,
+    topupGroupRatio,
+    groupInputRatio,
+    groupOutputRatio,
+  ])
 
   const emitRows = useCallback(
     (nextRows: GroupPricingRow[]) => {
       setRows(nextRows)
       const serialized = serializeGroupPricingRows(nextRows)
       onChange('GroupRatio', serialized.GroupRatio)
+      onChange('GroupInputRatio', serialized.GroupInputRatio)
+      onChange('GroupOutputRatio', serialized.GroupOutputRatio)
       onChange('UserUsableGroups', serialized.UserUsableGroups)
       onChange('TopupGroupRatio', serialized.TopupGroupRatio)
     },
@@ -492,6 +560,8 @@ function GroupPricingTable({
         _id: createGroupPricingId(),
         name,
         ratio: '1',
+        inputRatio: '1',
+        outputRatio: '1',
         topupRatio: '',
         selectable: true,
         description: '',
@@ -570,6 +640,42 @@ function GroupPricingTable({
                     value={row.ratio}
                     onChange={(event) =>
                       updateRow(row._id, 'ratio', event.target.value)
+                    }
+                  />
+                ),
+              },
+              {
+                id: 'input-ratio',
+                header: t('Input coefficient'),
+                className: 'min-w-28',
+                cell: (row) => (
+                  <Input
+                    type='number'
+                    min={0}
+                    step={0.1}
+                    value={row.inputRatio}
+                    aria-label={t('Input coefficient')}
+                    aria-invalid={Number(row.inputRatio) < 0}
+                    onChange={(event) =>
+                      updateRow(row._id, 'inputRatio', event.target.value)
+                    }
+                  />
+                ),
+              },
+              {
+                id: 'output-ratio',
+                header: t('Output coefficient'),
+                className: 'min-w-28',
+                cell: (row) => (
+                  <Input
+                    type='number'
+                    min={0}
+                    step={0.1}
+                    value={row.outputRatio}
+                    aria-label={t('Output coefficient')}
+                    aria-invalid={Number(row.outputRatio) < 0}
+                    onChange={(event) =>
+                      updateRow(row._id, 'outputRatio', event.target.value)
                     }
                   />
                 ),
@@ -1100,10 +1206,13 @@ function GroupOverrideDialog({
           <p className='text-muted-foreground text-xs'>
             {baseRatio !== undefined
               ? t('(instead of {{ratio}})', { ratio: baseRatio })
-              : t('Multiplier applied when {{userGroup}} uses {{targetGroup}}', {
-                  userGroup: userGroup || t('this user group'),
-                  targetGroup: targetGroup || t('this token group'),
-                })}
+              : t(
+                  'Multiplier applied when {{userGroup}} uses {{targetGroup}}',
+                  {
+                    userGroup: userGroup || t('this user group'),
+                    targetGroup: targetGroup || t('this token group'),
+                  }
+                )}
           </p>
         </div>
       </div>
@@ -1113,6 +1222,8 @@ function GroupOverrideDialog({
 
 type GroupDetailSheetProps = {
   groupName: string | null
+  groupInputRatio: string
+  groupOutputRatio: string
   onOpenChange: (open: boolean) => void
   registry: RegistryEntry[]
   topupGroupRatio: string
@@ -1189,6 +1300,8 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
 
     return {
       ratio: entry?.ratio,
+      inputRatio: normalizeRatio(parseRatioMap(props.groupInputRatio)[name]),
+      outputRatio: normalizeRatio(parseRatioMap(props.groupOutputRatio)[name]),
       topupRatio: Object.hasOwn(topupMap, name) ? String(topupMap[name]) : null,
       selectable: Object.hasOwn(usableMap, name),
       description: String(usableMap[name] ?? ''),
@@ -1200,6 +1313,8 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
   }, [
     name,
     props.registry,
+    props.groupInputRatio,
+    props.groupOutputRatio,
     props.topupGroupRatio,
     props.userUsableGroups,
     props.groupGroupRatio,
@@ -1231,6 +1346,18 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
                 <div className='flex justify-between'>
                   <dt className='text-muted-foreground'>{t('Ratio')}</dt>
                   <dd className='font-medium'>{detail.ratio ?? '-'}</dd>
+                </div>
+                <div className='flex justify-between'>
+                  <dt className='text-muted-foreground'>
+                    {t('Input coefficient')}
+                  </dt>
+                  <dd className='font-medium'>{detail.inputRatio}</dd>
+                </div>
+                <div className='flex justify-between'>
+                  <dt className='text-muted-foreground'>
+                    {t('Output coefficient')}
+                  </dt>
+                  <dd className='font-medium'>{detail.outputRatio}</dd>
                 </div>
                 <div className='flex justify-between'>
                   <dt className='text-muted-foreground'>{t('Top-up ratio')}</dt>

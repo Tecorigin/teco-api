@@ -58,18 +58,21 @@ function formatJsonValidationError(
     )
   }
 
-  const parts = [
-    error.line && error.column
-      ? t('JSON is invalid at line {{line}}, column {{column}}.', {
-          line: error.line,
-          column: error.column,
-        })
-      : error.position !== undefined
-        ? t('JSON is invalid at position {{position}}.', {
-            position: error.position,
-          })
-        : t('JSON is invalid. Please check the syntax.'),
-  ]
+  let locationMessage = t('JSON is invalid. Please check the syntax.')
+  if (error.line && error.column) {
+    locationMessage = t(
+      'JSON is invalid at line {{line}}, column {{column}}.',
+      {
+        line: error.line,
+        column: error.column,
+      }
+    )
+  } else if (error.position !== undefined) {
+    locationMessage = t('JSON is invalid at position {{position}}.', {
+      position: error.position,
+    })
+  }
+  const parts = [locationMessage]
 
   if (error.missingCommaLine) {
     parts.push(
@@ -115,6 +118,38 @@ const createModelSchema = (t: Translate) =>
 const createGroupSchema = (t: Translate) =>
   z.object({
     GroupRatio: createJsonStringField(t),
+    GroupInputRatio: createJsonStringField(t, {
+      predicate: (parsed) =>
+        parsed !== null &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        Object.entries(parsed).every(
+          ([name, value]) =>
+            name !== '' &&
+            typeof value === 'number' &&
+            Number.isFinite(value) &&
+            value >= 0
+        ),
+      predicateMessage: t(
+        'Expected a JSON object of non-negative group coefficients'
+      ),
+    }),
+    GroupOutputRatio: createJsonStringField(t, {
+      predicate: (parsed) =>
+        parsed !== null &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        Object.entries(parsed).every(
+          ([name, value]) =>
+            name !== '' &&
+            typeof value === 'number' &&
+            Number.isFinite(value) &&
+            value >= 0
+        ),
+      predicateMessage: t(
+        'Expected a JSON object of non-negative group coefficients'
+      ),
+    }),
     TopupGroupRatio: createJsonStringField(t),
     UserUsableGroups: createJsonStringField(t),
     GroupGroupRatio: createJsonStringField(t),
@@ -189,6 +224,8 @@ export function RatioSettingsCard({
 
   const groupNormalizedDefaults = useRef({
     GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
+    GroupInputRatio: normalizeJsonString(groupDefaults.GroupInputRatio),
+    GroupOutputRatio: normalizeJsonString(groupDefaults.GroupOutputRatio),
     TopupGroupRatio: normalizeJsonString(groupDefaults.TopupGroupRatio),
     UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
     GroupGroupRatio: normalizeJsonString(groupDefaults.GroupGroupRatio),
@@ -227,6 +264,8 @@ export function RatioSettingsCard({
     defaultValues: {
       ...groupDefaults,
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
+      GroupInputRatio: formatJsonForTextarea(groupDefaults.GroupInputRatio),
+      GroupOutputRatio: formatJsonForTextarea(groupDefaults.GroupOutputRatio),
       TopupGroupRatio: formatJsonForTextarea(groupDefaults.TopupGroupRatio),
       UserUsableGroups: formatJsonForTextarea(groupDefaults.UserUsableGroups),
       GroupGroupRatio: formatJsonForTextarea(groupDefaults.GroupGroupRatio),
@@ -275,6 +314,8 @@ export function RatioSettingsCard({
   useEffect(() => {
     groupNormalizedDefaults.current = {
       GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
+      GroupInputRatio: normalizeJsonString(groupDefaults.GroupInputRatio),
+      GroupOutputRatio: normalizeJsonString(groupDefaults.GroupOutputRatio),
       TopupGroupRatio: normalizeJsonString(groupDefaults.TopupGroupRatio),
       UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
       GroupGroupRatio: normalizeJsonString(groupDefaults.GroupGroupRatio),
@@ -288,6 +329,8 @@ export function RatioSettingsCard({
     groupForm.reset({
       ...groupDefaults,
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
+      GroupInputRatio: formatJsonForTextarea(groupDefaults.GroupInputRatio),
+      GroupOutputRatio: formatJsonForTextarea(groupDefaults.GroupOutputRatio),
       TopupGroupRatio: formatJsonForTextarea(groupDefaults.TopupGroupRatio),
       UserUsableGroups: formatJsonForTextarea(groupDefaults.UserUsableGroups),
       GroupGroupRatio: formatJsonForTextarea(groupDefaults.GroupGroupRatio),
@@ -345,6 +388,8 @@ export function RatioSettingsCard({
     async (values: GroupFormValues) => {
       const normalized = {
         GroupRatio: normalizeJsonString(values.GroupRatio),
+        GroupInputRatio: normalizeJsonString(values.GroupInputRatio),
+        GroupOutputRatio: normalizeJsonString(values.GroupOutputRatio),
         TopupGroupRatio: normalizeJsonString(values.TopupGroupRatio),
         UserUsableGroups: normalizeJsonString(values.UserUsableGroups),
         GroupGroupRatio: normalizeJsonString(values.GroupGroupRatio),

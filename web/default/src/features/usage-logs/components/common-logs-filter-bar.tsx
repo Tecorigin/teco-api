@@ -88,6 +88,7 @@ function buildSearchSourceKey(values: {
   username?: unknown
   requestId?: unknown
   upstreamRequestId?: unknown
+  streamError?: unknown
   type?: unknown
 }) {
   return [
@@ -100,6 +101,7 @@ function buildSearchSourceKey(values: {
     values.username,
     values.requestId,
     values.upstreamRequestId,
+    values.streamError,
     Array.isArray(values.type) ? values.type.join(',') : values.type,
   ]
     .map((value) => String(value ?? ''))
@@ -133,6 +135,7 @@ export function CommonLogsFilterBar<TData>(
       username: searchParams.username,
       requestId: searchParams.requestId,
       upstreamRequestId: searchParams.upstreamRequestId,
+      streamError: searchParams.streamError,
       type: searchParams.type,
     }
     const filters: CommonLogFilters = {
@@ -147,6 +150,7 @@ export function CommonLogsFilterBar<TData>(
       username: searchParams.username || undefined,
       requestId: searchParams.requestId || undefined,
       upstreamRequestId: searchParams.upstreamRequestId || undefined,
+      streamError: searchParams.streamError,
     }
     return {
       sourceKey: buildSearchSourceKey(sourceValues),
@@ -163,6 +167,7 @@ export function CommonLogsFilterBar<TData>(
     searchParams.username,
     searchParams.requestId,
     searchParams.upstreamRequestId,
+    searchParams.streamError,
     searchParams.type,
   ])
   const [draft, setDraft] = useState<CommonLogDraft>(() => searchState)
@@ -242,8 +247,13 @@ export function CommonLogsFilterBar<TData>(
     !!filters.upstreamRequestId
 
   const hasTypeFilter = logType !== LOG_TYPE_ALL_VALUE
+  const hasStreamErrorFilter = filters.streamError === '1'
   const hasAdditionalFilters =
-    !!filters.model || !!filters.group || hasTypeFilter || hasExpandedFilters
+    !!filters.model ||
+    !!filters.group ||
+    hasTypeFilter ||
+    hasStreamErrorFilter ||
+    hasExpandedFilters
 
   const expandedFilterCount = [
     filters.token,
@@ -359,6 +369,32 @@ export function CommonLogsFilterBar<TData>(
       </Select>
     </LogsFilterField>
   )
+  const streamStatusFilter = (
+    <LogsFilterField>
+      <Select
+        items={[
+          { value: 'all', label: t('All') },
+          { value: '1', label: t('Error') },
+        ]}
+        value={filters.streamError || 'all'}
+        onValueChange={(value) =>
+          handleChange('streamError', value === '1' ? '1' : undefined)
+        }
+      >
+        <SelectTrigger aria-label={t('Stream Status')}>
+          <SelectValue>
+            {t('Stream Status')}: {hasStreamErrorFilter ? t('Error') : t('All')}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          <SelectGroup>
+            <SelectItem value='all'>{t('All')}</SelectItem>
+            <SelectItem value='1'>{t('Error')}</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </LogsFilterField>
+  )
   const advancedFilters = (
     <>
       <LogsFilterField>
@@ -421,6 +457,7 @@ export function CommonLogsFilterBar<TData>(
           {modelFilter}
           {groupFilter}
           {typeFilter}
+          {streamStatusFilter}
         </>
       }
       advancedFilters={advancedFilters}
@@ -430,11 +467,14 @@ export function CommonLogsFilterBar<TData>(
           {modelFilter}
           {groupFilter}
           {typeFilter}
+          {streamStatusFilter}
           {advancedFilters}
         </>
       }
       mobileFilterCount={
-        [filters.model, filters.group, hasTypeFilter].filter(Boolean).length +
+        [filters.model, filters.group, hasTypeFilter, hasStreamErrorFilter].filter(
+          Boolean
+        ).length +
         expandedFilterCount
       }
       hasAdvancedActiveFilters={hasExpandedFilters}

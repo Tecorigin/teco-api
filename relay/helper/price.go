@@ -2,9 +2,11 @@ package helper
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -90,6 +92,7 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	var audioRatio float64
 	var audioCompletionRatio float64
 	var freeModel bool
+	var groupInputRatio, groupOutputRatio *float64
 	if !usePrice {
 		preConsumedTokens := common.Max(promptTokens, common.PreConsumedQuota)
 		if meta.MaxTokens != 0 {
@@ -118,6 +121,17 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 		audioCompletionRatio = ratio_setting.GetAudioCompletionRatio(info.OriginModelName)
 		ratio := modelRatio * groupRatioInfo.GroupRatio
 		preConsumedQuota = common.QuotaFromFloat(float64(preConsumedTokens) * ratio)
+		if isPlainTextTokenBilling(info, meta) {
+			inputRatio, outputRatio := ratio_setting.GetGroupTokenRatios(info.UsingGroup)
+			groupInputRatio, groupOutputRatio = &inputRatio, &outputRatio
+			if inputRatio != 1 || outputRatio != 1 {
+				estimatedOutputTokens := meta.MaxTokens
+				if estimatedOutputTokens == 0 && outputRatio > 0 {
+					estimatedOutputTokens = defaultTieredPreConsumeMaxTokens
+				}
+				preConsumedQuota = common.QuotaFromFloat((float64(common.Max(promptTokens, common.PreConsumedQuota))*inputRatio + float64(estimatedOutputTokens)*completionRatio*outputRatio) * ratio)
+			}
+		}
 	} else {
 		if meta.ImagePriceRatio != 0 {
 			modelPrice = modelPrice * meta.ImagePriceRatio
@@ -149,6 +163,8 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 		ModelPrice:           modelPrice,
 		ModelRatio:           modelRatio,
 		CompletionRatio:      completionRatio,
+		GroupInputRatio:      groupInputRatio,
+		GroupOutputRatio:     groupOutputRatio,
 		GroupRatioInfo:       groupRatioInfo,
 		UsePrice:             usePrice,
 		CacheRatio:           cacheRatio,
@@ -229,6 +245,37 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 	return priceData, nil
 }
 
+func isPlainTextTokenBilling(info *relaycommon.RelayInfo, meta *types.TokenCountMeta) bool {
+	if len(meta.Files) > 0 || meta.TokenType == types.TokenTypeImage || info.ASRInputSeconds > 0 || info.ImageGenerationCount > 0 || info.VideoGenerationSeconds > 0 || info.TTSInputCharacters > 0 {
+		return false
+	}
+	switch info.RelayFormat {
+	case types.RelayFormatOpenAIRealtime, types.RelayFormatOpenAIAudio, types.RelayFormatOpenAIImage, types.RelayFormatTask, types.RelayFormatMjProxy:
+		return false
+	}
+	switch request := info.Request.(type) {
+	case *dto.GeneralOpenAIRequest:
+		if len(request.Modalities) > 0 {
+			var modalities []string
+			if common.Unmarshal(request.Modalities, &modalities) != nil {
+				return false
+			}
+			for _, modality := range modalities {
+				if !strings.EqualFold(modality, "text") {
+					return false
+				}
+			}
+		}
+	case *dto.GeminiChatRequest:
+		for _, modality := range request.GenerationConfig.ResponseModalities {
+			if !strings.EqualFold(modality, "text") {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func HasModelBillingConfig(modelName string) bool {
 	if _, ok := ratio_setting.GetModelPrice(modelName, false); ok {
 		return true
@@ -259,7 +306,12 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 		return types.PriceData{}, err
 	}
 
-	rawCost, trace, err := billingexpr.RunExprWithRequest(exprStr, billingexpr.TokenParams{
+	inputRatio, outputRatio := ratio_setting.GetGroupTokenRatios(info.UsingGroup)
+	pricedExpression, err := billingexpr.ApplyGroupTokenRatios(exprStr, inputRatio, outputRatio)
+	if err != nil {
+		return types.PriceData{}, fmt.Errorf("model %s group token coefficients cannot be applied: %w", info.OriginModelName, err)
+	}
+	rawCost, trace, err := billingexpr.RunExprWithRequest(pricedExpression, billingexpr.TokenParams{
 		P:    float64(promptTokens),
 		C:    float64(estimatedCompletionTokens),
 		Len:  float64(promptTokens),
@@ -270,6 +322,9 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 	}, requestInput)
 	if err != nil {
 		return types.PriceData{}, fmt.Errorf("model %s tiered expr run failed: %w", info.OriginModelName, err)
+	}
+	if (inputRatio != 1 || outputRatio != 1) && (rawCost < 0 || math.IsNaN(rawCost)) {
+		return types.PriceData{}, fmt.Errorf("model %s group-adjusted billing expression returned an invalid cost", info.OriginModelName)
 	}
 
 	// Expression coefficients are $/1M tokens prices; convert to quota the same way per-call billing does.
@@ -291,6 +346,8 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 		ExprString:                exprStr,
 		ExprHash:                  exprHash,
 		GroupRatio:                groupRatioInfo.GroupRatio,
+		GroupInputRatio:           &inputRatio,
+		GroupOutputRatio:          &outputRatio,
 		EstimatedPromptTokens:     promptTokens,
 		EstimatedCompletionTokens: estimatedCompletionTokens,
 		EstimatedQuotaBeforeGroup: quotaBeforeGroup,

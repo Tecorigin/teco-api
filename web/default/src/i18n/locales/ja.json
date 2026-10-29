@@ -5447,7 +5447,10 @@
     "请选择或创建一个知识库": "ナレッジベースを選択または作成してください",
     "输入问题，Enter 发送，Shift+Enter 换行": "質問を入力。Enterで送信、Shift+Enterで改行",
     "问答失败": "Q&Aに失敗しました",
-    "问答接口返回 SSE。stream 为 true 时返回 OpenAI 风格的 chat.completion.chunk 事件；stream 为 false 时返回单个 OpenAI 风格 JSON 响应。return_docs 为 true 时会返回参考来源。": "Q&A は SSE を返します。stream=true は OpenAI 形式イベント、stream=false は JSON 応答です。return_docs=true で参照元を含みます。"
+    "问答接口返回 SSE。stream 为 true 时返回 OpenAI 风格的 chat.completion.chunk 事件；stream 为 false 时返回单个 OpenAI 风格 JSON 响应。return_docs 为 true 时会返回参考来源。": "Q&A は SSE を返します。stream=true は OpenAI 形式イベント、stream=false は JSON 応答です。return_docs=true で参照元を含みます。",
+    "Input coefficient": "入力係数",
+    "Output coefficient": "出力係数",
+    "Expected a JSON object of non-negative group coefficients": "グループと非負の係数を対応付けた JSON オブジェクトを入力してください"
   },
   "Model Usage Limits": "Model Usage Limits",
   "Configure per-user and per-model usage limits (daily/weekly/monthly) and view violation records.": "Configure per-user and per-model usage limits (daily/weekly/monthly) and view violation records.",

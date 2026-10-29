@@ -275,8 +275,12 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
-	case "GroupRatio":
-		err = ratio_setting.CheckGroupRatio(option.Value.(string))
+	case "GroupRatio", "GroupInputRatio", "GroupOutputRatio":
+		if option.Key == "GroupRatio" {
+			err = ratio_setting.CheckGroupRatio(option.Value.(string))
+		} else {
+			err = ratio_setting.CheckGroupTokenRatio(option.Value.(string))
+		}
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,

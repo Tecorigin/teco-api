@@ -11,11 +11,137 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestTieredGroupTokenRatiosPreserveMediaAndToolFees(t *testing.T) {
+	expression := `tier("base", p * 2 + c * 8 + cr * 0.2 + cc * 2.5 + img * 2.5 + img_o)`
+	inputRatio, outputRatio := 0.5, 0.8
+	info := &relaycommon.RelayInfo{TieredBillingSnapshot: &billingexpr.BillingSnapshot{
+		BillingMode: "tiered_expr", ExprString: expression, ExprHash: billingexpr.ExprHashString(expression),
+		GroupRatio: 0.5, QuotaPerUnit: 500000,
+		GroupInputRatio: &inputRatio, GroupOutputRatio: &outputRatio,
+	}}
+	usage := &dto.Usage{
+		PromptTokens: 1220, CompletionTokens: 250,
+		PromptTokensDetails:    dto.InputTokenDetails{CachedTokens: 100, CachedCreationTokens: 20, ImageTokens: 100},
+		CompletionTokenDetails: dto.OutputTokenDetails{ImageTokens: 50},
+	}
+	params := BuildTieredTokenParams(usage, false, billingexpr.UsedVars(expression), 0, 0, 0)
+	assert.Equal(t, 1000.0, params.P)
+	assert.Equal(t, 200.0, params.C)
+	assert.Equal(t, 1220.0, params.Len)
+	ok, quota, result := TryTieredSettle(info, params)
+	require.True(t, ok)
+	require.NotNil(t, result)
+	assert.Equal(t, 654, quota)
+	total := composeTieredTextQuota(info, textQuotaSummary{ToolCallSurchargeQuota: decimal.NewFromInt(5000)}, quota, result)
+	assert.Equal(t, 5654, total)
+	other := map[string]interface{}{}
+	InjectTieredBillingInfo(other, info, result)
+	assert.Equal(t, 0.5, other["group_input_ratio"])
+	assert.Equal(t, 0.8, other["group_output_ratio"])
+}
+
+func TestCalculateTextQuotaGroupTokenRatios(t *testing.T) {
+	inputRatio, outputRatio := 0.5, 0.8
+	for _, test := range []struct {
+		name              string
+		configured        bool
+		imageTokens       int
+		audioOutputTokens int
+		usePrice          bool
+		tiered            bool
+		want              int
+	}{
+		{name: "legacy defaults", want: 1445},
+		{name: "text and cache coefficients", configured: true, want: 903},
+		{name: "multimodal image unchanged", configured: true, imageTokens: 100, want: 1445},
+		{name: "multimodal audio unchanged", configured: true, audioOutputTokens: 100, want: 1445},
+		{name: "per call unchanged", configured: true, usePrice: true, want: int(common.QuotaPerUnit)},
+		{name: "expression fallback unchanged", configured: true, tiered: true, want: 1445},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			info := &relaycommon.RelayInfo{
+				OriginModelName: "text-coefficients-test",
+				StartTime:       time.Now(),
+				PriceData: types.PriceData{
+					ModelRatio: 2, CompletionRatio: 3, CacheRatio: 0.1,
+					CacheCreationRatio: 1.25, ImageRatio: 1,
+					GroupRatioInfo: types.GroupRatioInfo{GroupRatio: 0.5},
+					UsePrice:       test.usePrice, ModelPrice: 2,
+				},
+			}
+			if test.configured {
+				info.PriceData.GroupInputRatio = &inputRatio
+				info.PriceData.GroupOutputRatio = &outputRatio
+			}
+			if test.tiered {
+				info.TieredBillingSnapshot = &billingexpr.BillingSnapshot{}
+			}
+			usage := &dto.Usage{
+				PromptTokens: 1000, CompletionTokens: 200,
+				PromptTokensDetails:    dto.InputTokenDetails{CachedTokens: 200, CachedCreationTokens: 100, ImageTokens: test.imageTokens},
+				CompletionTokenDetails: dto.OutputTokenDetails{AudioTokens: test.audioOutputTokens},
+			}
+			summary := calculateTextQuotaSummary(ctx, info, usage)
+			assert.Equal(t, test.want, summary.Quota)
+		})
+	}
+}
+
+func TestCalculateTextQuotaZeroGroupTokenRatios(t *testing.T) {
+	var originalPrices string
+	require.NoError(t, config.GlobalConfig.SaveToDB(func(key, value string) error {
+		if key == "tool_price_setting.prices" {
+			originalPrices = value
+		}
+		return nil
+	}))
+	t.Cleanup(func() {
+		require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{"tool_price_setting.prices": originalPrices}))
+		operation_setting.RebuildToolPriceIndex()
+	})
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{"tool_price_setting.prices": `{"web_search_preview":10,"web_search_preview:gpt-4o*":10}`}))
+	operation_setting.RebuildToolPriceIndex()
+	for _, test := range []struct {
+		name          string
+		input, output float64
+		tool          bool
+		want          int
+	}{
+		{"free input", 0, 1, false, 600},
+		{"free output", 1, 0, false, 1000},
+		{"free text", 0, 0, false, 0},
+		{"tools remain billable", 0, 0, true, 5000},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			info := &relaycommon.RelayInfo{
+				OriginModelName: "text-zero-coefficients-test",
+				StartTime:       time.Now(),
+				PriceData: types.PriceData{
+					ModelRatio: 1, CompletionRatio: 3,
+					GroupRatioInfo:  types.GroupRatioInfo{GroupRatio: 1},
+					GroupInputRatio: &test.input, GroupOutputRatio: &test.output,
+				},
+			}
+			if test.tool {
+				info.OriginModelName = "gpt-4o-search-preview"
+			}
+			summary := calculateTextQuotaSummary(ctx, info, &dto.Usage{PromptTokens: 1000, CompletionTokens: 200})
+			assert.Equal(t, test.want, summary.Quota)
+		})
+	}
+}
 
 func TestCalculateTextQuotaSummaryUnifiedForClaudeSemantic(t *testing.T) {
 	gin.SetMode(gin.TestMode)

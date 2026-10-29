@@ -50,18 +50,20 @@ type TraceResult struct {
 // BillingSnapshot captures the billing rule state frozen at pre-consume time.
 // It is fully serializable and contains no compiled program pointers.
 type BillingSnapshot struct {
-	BillingMode               string  `json:"billing_mode"`
-	ModelName                 string  `json:"model_name"`
-	ExprString                string  `json:"expr_string"`
-	ExprHash                  string  `json:"expr_hash"`
-	GroupRatio                float64 `json:"group_ratio"`
-	EstimatedPromptTokens     int     `json:"estimated_prompt_tokens"`
-	EstimatedCompletionTokens int     `json:"estimated_completion_tokens"`
-	EstimatedQuotaBeforeGroup float64 `json:"estimated_quota_before_group"`
-	EstimatedQuotaAfterGroup  int     `json:"estimated_quota_after_group"`
-	EstimatedTier             string  `json:"estimated_tier"`
-	QuotaPerUnit              float64 `json:"quota_per_unit"`
-	ExprVersion               int     `json:"expr_version"`
+	BillingMode               string   `json:"billing_mode"`
+	ModelName                 string   `json:"model_name"`
+	ExprString                string   `json:"expr_string"`
+	ExprHash                  string   `json:"expr_hash"`
+	GroupRatio                float64  `json:"group_ratio"`
+	GroupInputRatio           *float64 `json:"group_input_ratio,omitempty"`
+	GroupOutputRatio          *float64 `json:"group_output_ratio,omitempty"`
+	EstimatedPromptTokens     int      `json:"estimated_prompt_tokens"`
+	EstimatedCompletionTokens int      `json:"estimated_completion_tokens"`
+	EstimatedQuotaBeforeGroup float64  `json:"estimated_quota_before_group"`
+	EstimatedQuotaAfterGroup  int      `json:"estimated_quota_after_group"`
+	EstimatedTier             string   `json:"estimated_tier"`
+	QuotaPerUnit              float64  `json:"quota_per_unit"`
+	ExprVersion               int      `json:"expr_version"`
 }
 
 // TieredResult holds everything needed after running tiered settlement.

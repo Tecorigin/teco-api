@@ -3,6 +3,8 @@ package ratio_setting
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/config"
@@ -16,6 +18,59 @@ var defaultGroupRatio = map[string]float64{
 }
 
 var groupRatioMap = types.NewRWMap[string, float64]()
+
+var groupInputRatioMap = types.NewRWMap[string, float64]()
+var groupOutputRatioMap = types.NewRWMap[string, float64]()
+
+func GroupInputRatio2JSONString() string {
+	return groupInputRatioMap.MarshalJSONString()
+}
+
+func GroupOutputRatio2JSONString() string {
+	return groupOutputRatioMap.MarshalJSONString()
+}
+
+func CheckGroupTokenRatio(value string) error {
+	var ratios map[string]float64
+	if err := common.UnmarshalJsonStr(value, &ratios); err != nil {
+		return err
+	}
+	if ratios == nil {
+		return errors.New("group token ratios must be a JSON object")
+	}
+	for name, ratio := range ratios {
+		if name == "" || ratio < 0 || math.IsNaN(ratio) || math.IsInf(ratio, 0) {
+			return fmt.Errorf("group token ratio must be finite and non-negative: %s", name)
+		}
+	}
+	return nil
+}
+
+func UpdateGroupInputRatioByJSONString(value string) error {
+	if err := CheckGroupTokenRatio(value); err != nil {
+		return err
+	}
+	return types.LoadFromJsonString(groupInputRatioMap, value)
+}
+
+func UpdateGroupOutputRatioByJSONString(value string) error {
+	if err := CheckGroupTokenRatio(value); err != nil {
+		return err
+	}
+	return types.LoadFromJsonString(groupOutputRatioMap, value)
+}
+
+func GetGroupTokenRatios(name string) (float64, float64) {
+	input, exists := groupInputRatioMap.Get(name)
+	if !exists {
+		input = 1
+	}
+	output, exists := groupOutputRatioMap.Get(name)
+	if !exists {
+		output = 1
+	}
+	return input, output
+}
 
 var defaultGroupGroupRatio = map[string]map[string]float64{
 	"vip": {

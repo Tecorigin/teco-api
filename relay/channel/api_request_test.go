@@ -3,12 +3,55 @@ package channel
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestDoRequestCapturesUpstreamIDRegardlessOfStatus(t *testing.T) {
+	service.InitHttpClient()
+	for _, testCase := range []struct {
+		name       string
+		statusCode int
+		header     string
+	}{
+		{"success", http.StatusOK, "X-Request-Id"},
+		{"bad request", http.StatusBadRequest, "X-Request-Id"},
+		{"anthropic failure", http.StatusBadRequest, "Anthropic-Request-Id"},
+		{"openai failure", http.StatusTooManyRequests, "Openai-Request-Id"},
+		{"aws failure", http.StatusInternalServerError, "X-Amzn-Requestid"},
+		{"legacy header", http.StatusBadRequest, common.RequestIdKey},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				writer.Header().Set(testCase.header, " upstream-id ")
+				writer.WriteHeader(testCase.statusCode)
+			}))
+			defer server.Close()
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader("{}"))
+			req, err := http.NewRequest(http.MethodPost, server.URL, strings.NewReader("{}"))
+			require.NoError(t, err)
+			info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{}}
+
+			resp, err := DoRequest(ctx, req, info)
+
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			assert.Equal(t, testCase.statusCode, resp.StatusCode)
+			assert.Equal(t, "upstream-id", info.UpstreamRequestId)
+			assert.Equal(t, "upstream-id", ctx.GetString(common.UpstreamRequestIdKey))
+			assert.Equal(t, "upstream-id", ctx.GetString("upstream_request_id"))
+			assert.Equal(t, "header:"+strings.ToLower(testCase.header), info.UpstreamRequestSource)
+		})
+	}
+}
 
 func TestProcessHeaderOverride_ChannelTestSkipsPassthroughRules(t *testing.T) {
 	t.Parallel()

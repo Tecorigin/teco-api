@@ -1,6 +1,11 @@
 package billingexpr
 
-import "github.com/QuantumNous/new-api/common"
+import (
+	"fmt"
+	"math"
+
+	"github.com/QuantumNous/new-api/common"
+)
 
 // quotaConversion converts raw expression output to quota based on the
 // expression version. This is the central dispatch point for future versions
@@ -19,9 +24,27 @@ func ComputeTieredQuota(snap *BillingSnapshot, params TokenParams) (TieredResult
 }
 
 func ComputeTieredQuotaWithRequest(snap *BillingSnapshot, params TokenParams, request RequestInput) (TieredResult, error) {
-	cost, trace, err := RunExprByHashWithRequest(snap.ExprString, snap.ExprHash, params, request)
+	inputRatio, outputRatio := 1.0, 1.0
+	if snap.GroupInputRatio != nil {
+		inputRatio = *snap.GroupInputRatio
+	}
+	if snap.GroupOutputRatio != nil {
+		outputRatio = *snap.GroupOutputRatio
+	}
+	expression, err := ApplyGroupTokenRatios(snap.ExprString, inputRatio, outputRatio)
 	if err != nil {
 		return TieredResult{}, err
+	}
+	hash := snap.ExprHash
+	if expression != snap.ExprString {
+		hash = ExprHashString(expression)
+	}
+	cost, trace, err := RunExprByHashWithRequest(expression, hash, params, request)
+	if err != nil {
+		return TieredResult{}, err
+	}
+	if (inputRatio != 1 || outputRatio != 1) && (cost < 0 || math.IsNaN(cost)) {
+		return TieredResult{}, fmt.Errorf("group-adjusted billing expression returned an invalid cost")
 	}
 
 	quotaBeforeGroup := quotaConversion(cost, snap)

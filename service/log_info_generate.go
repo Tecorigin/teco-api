@@ -329,6 +329,12 @@ func InjectTieredBillingInfo(other map[string]interface{}, relayInfo *relaycommo
 	}
 	other["billing_mode"] = "tiered_expr"
 	other["expr_b64"] = base64.StdEncoding.EncodeToString([]byte(snap.ExprString))
+	if snap.GroupInputRatio != nil {
+		other["group_input_ratio"] = *snap.GroupInputRatio
+	}
+	if snap.GroupOutputRatio != nil {
+		other["group_output_ratio"] = *snap.GroupOutputRatio
+	}
 	if result != nil {
 		other["matched_tier"] = result.MatchedTier
 	} else if snap.EstimatedTier != "" {

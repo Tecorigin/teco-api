@@ -61,8 +61,8 @@ func sanitizeClickHouseLikePattern(input string) (string, error) {
 
 type Log struct {
 	Id                int    `json:"id" gorm:"index:idx_created_at_id,priority:2;index:idx_user_id_id,priority:2"`
-	UserId            int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
-	CreatedAt         int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:1;index:idx_created_at_type"`
+	UserId            int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1;index:idx_logs_user_stream_status_created_at,priority:1"`
+	CreatedAt         int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:1;index:idx_created_at_type;index:idx_logs_stream_status_created_at,priority:2;index:idx_logs_user_stream_status_created_at,priority:3"`
 	Type              int    `json:"type" gorm:"index:idx_created_at_type"`
 	Content           string `json:"content"`
 	Username          string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
@@ -73,6 +73,7 @@ type Log struct {
 	CompletionTokens  int    `json:"completion_tokens" gorm:"default:0"`
 	UseTime           int    `json:"use_time" gorm:"default:0"`
 	IsStream          bool   `json:"is_stream"`
+	StreamStatus      string `json:"-" gorm:"type:varchar(16);index:idx_logs_stream_status_created_at,priority:1;index:idx_logs_user_stream_status_created_at,priority:2"`
 	ChannelId         int    `json:"channel" gorm:"index"`
 	ChannelName       string `json:"channel_name" gorm:"->"`
 	TokenId           int    `json:"token_id" gorm:"default:0;index"`
@@ -104,6 +105,28 @@ func ensureLogRequestId(log *Log) {
 func createLog(log *Log) error {
 	ensureLogRequestId(log)
 	return LOG_DB.Create(log).Error
+}
+
+func (log *Log) BeforeCreate(_ *gorm.DB) error {
+	if !log.IsStream {
+		log.StreamStatus = ""
+		return nil
+	}
+	if log.StreamStatus != "" || log.Other == "" {
+		return nil
+	}
+	var other struct {
+		StreamStatus struct {
+			Status string `json:"status"`
+		} `json:"stream_status"`
+	}
+	if common.UnmarshalJsonStr(log.Other, &other) == nil {
+		switch other.StreamStatus.Status {
+		case "ok", "error":
+			log.StreamStatus = other.StreamStatus.Status
+		}
+	}
+	return nil
 }
 
 func clickHouseLogOrder(prefix string) string {
@@ -299,6 +322,9 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
+	if value, ok := other["upstream_request_id"].(string); ok && value != "" {
+		upstreamRequestId = value
+	}
 	otherStr := common.MapToJsonStr(other)
 	// 判断是否需要记录 IP
 	needRecordIp := false
@@ -556,6 +582,13 @@ func buildConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) 
 		UpstreamRequestId: upstreamRequestId,
 		Other:             otherStr,
 	}
+	if log.IsStream && params.Other != nil {
+		if streamStatus, ok := params.Other["stream_status"].(map[string]interface{}); ok {
+			if status, ok := streamStatus["status"].(string); ok && (status == "ok" || status == "error") {
+				log.StreamStatus = status
+			}
+		}
+	}
 	return log, username, requestId, createdAt, debugParams
 }
 
@@ -568,7 +601,11 @@ func RecordConsumeLogBatch(logs []*Log) {
 	}
 }
 
-func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string, auditOnly bool) (logs []*Log, total int64, err error) {
+func applyStreamErrorLogFilter(tx *gorm.DB) *gorm.DB {
+	return tx.Where("logs.is_stream = ? AND logs.stream_status = ?", true, "error")
+}
+
+func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string, auditOnly bool, streamErrorOnly bool) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB
@@ -590,6 +627,9 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	}
 	if auditOnly {
 		tx = tx.Where("(logs.other LIKE ? OR logs.other LIKE ?)", "%\"audit_prompt\"%", "%\"audit_reply\"%")
+	}
+	if streamErrorOnly {
+		tx = applyStreamErrorLogFilter(tx)
 	}
 	if upstreamRequestId != "" {
 		tx = tx.Where("logs.upstream_request_id = ?", upstreamRequestId)
@@ -665,7 +705,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 
 const logSearchCountLimit = 10000
 
-func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string, auditOnly bool) (logs []*Log, total int64, err error) {
+func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string, auditOnly bool, streamErrorOnly bool) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB.Where("logs.user_id = ?", userId)
@@ -684,6 +724,9 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 	if auditOnly {
 		tx = tx.Where("(logs.other LIKE ? OR logs.other LIKE ?)", "%\"audit_prompt\"%", "%\"audit_reply\"%")
+	}
+	if streamErrorOnly {
+		tx = applyStreamErrorLogFilter(tx)
 	}
 	if upstreamRequestId != "" {
 		tx = tx.Where("logs.upstream_request_id = ?", upstreamRequestId)
@@ -722,11 +765,16 @@ type Stat struct {
 	Tpm   int `json:"tpm"`
 }
 
-func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
+func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string, streamErrorOnly bool) (stat Stat, err error) {
 	tx := LOG_DB.Table("logs").Select("COALESCE(sum(quota), 0) quota")
 
 	// 为rpm和tpm创建单独的查询
 	rpmTpmQuery := LOG_DB.Table("logs").Select("count(*) rpm, COALESCE(sum(prompt_tokens), 0) + COALESCE(sum(completion_tokens), 0) tpm")
+
+	if streamErrorOnly {
+		tx = applyStreamErrorLogFilter(tx)
+		rpmTpmQuery = applyStreamErrorLogFilter(rpmTpmQuery)
+	}
 
 	if tx, err = applyExplicitLogTextFilter(tx, "username", username); err != nil {
 		return stat, err

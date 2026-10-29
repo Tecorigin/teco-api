@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/types"
+	"github.com/gin-gonic/gin"
 )
 
 func MidjourneyErrorWrapper(code int, desc string) *dto.MidjourneyResponse {
@@ -110,6 +111,32 @@ func RelayErrorHandler(ctx context.Context, resp *http.Response, showBodyWhenFai
 			newApiErr.Err = fmt.Errorf("bad response status code %d", resp.StatusCode)
 		}
 		return
+	}
+
+	if c, ok := ctx.(*gin.Context); ok && c.GetString("upstream_request_id") == "" && c.GetString(common.UpstreamRequestIdKey) == "" {
+		var identifiers struct {
+			RequestID string `json:"request_id"`
+			TraceID   string `json:"trace_id"`
+		}
+		for _, body := range []json.RawMessage{responseBody, errResponse.Error} {
+			identifiers.RequestID = ""
+			identifiers.TraceID = ""
+			if common.Unmarshal(body, &identifiers) != nil {
+				continue
+			}
+			id := strings.TrimSpace(identifiers.RequestID)
+			source := "body:request_id"
+			if id == "" {
+				id = strings.TrimSpace(identifiers.TraceID)
+				source = "body:trace_id"
+			}
+			if id != "" {
+				c.Set(common.UpstreamRequestIdKey, id)
+				c.Set("upstream_request_id", id)
+				c.Set("upstream_request_id_source", source)
+				break
+			}
+		}
 	}
 
 	if common.GetJsonType(errResponse.Error) == "object" {

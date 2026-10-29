@@ -5447,7 +5447,10 @@
     "请选择或创建一个知识库": "Sélectionnez ou créez une base de connaissances",
     "输入问题，Enter 发送，Shift+Enter 换行": "Saisissez une question. Entrée pour envoyer, Maj+Entrée pour saut de ligne",
     "问答失败": "Échec de la question",
-    "问答接口返回 SSE。stream 为 true 时返回 OpenAI 风格的 chat.completion.chunk 事件；stream 为 false 时返回单个 OpenAI 风格 JSON 响应。return_docs 为 true 时会返回参考来源。": "L’endpoint Q&R renvoie SSE. stream=true renvoie des événements OpenAI ; stream=false renvoie une réponse JSON. return_docs=true inclut les références."
+    "问答接口返回 SSE。stream 为 true 时返回 OpenAI 风格的 chat.completion.chunk 事件；stream 为 false 时返回单个 OpenAI 风格 JSON 响应。return_docs 为 true 时会返回参考来源。": "L’endpoint Q&R renvoie SSE. stream=true renvoie des événements OpenAI ; stream=false renvoie une réponse JSON. return_docs=true inclut les références.",
+    "Input coefficient": "Coefficient d’entrée",
+    "Output coefficient": "Coefficient de sortie",
+    "Expected a JSON object of non-negative group coefficients": "Un objet JSON associant les groupes à des coefficients non négatifs est requis"
   },
   "Model Usage Limits": "Model Usage Limits",
   "Configure per-user and per-model usage limits (daily/weekly/monthly) and view violation records.": "Configure per-user and per-model usage limits (daily/weekly/monthly) and view violation records.",

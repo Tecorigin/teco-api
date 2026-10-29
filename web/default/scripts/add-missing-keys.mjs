@@ -456,6 +456,50 @@ if (process.argv.includes('--rate-limit-scopes')) {
     selectedKeys = new Set(Object.keys(rateLimitScopeLabels))
 }
 
+const groupTokenRatioLabels = {
+    en: {
+        'Input coefficient': 'Input coefficient',
+        'Output coefficient': 'Output coefficient',
+        'Expected a JSON object of non-negative group coefficients': 'Expected a JSON object of non-negative group coefficients',
+    },
+    zh: {
+        'Input coefficient': '输入系数',
+        'Output coefficient': '输出系数',
+        'Expected a JSON object of non-negative group coefficients': '请输入分组到非负系数的 JSON 对象',
+    },
+    'zh-TW': {
+        'Input coefficient': '輸入係數',
+        'Output coefficient': '輸出係數',
+        'Expected a JSON object of non-negative group coefficients': '請輸入分組到非負係數的 JSON 物件',
+    },
+    fr: {
+        'Input coefficient': 'Coefficient d’entrée',
+        'Output coefficient': 'Coefficient de sortie',
+        'Expected a JSON object of non-negative group coefficients': 'Un objet JSON associant les groupes à des coefficients non négatifs est requis',
+    },
+    ja: {
+        'Input coefficient': '入力係数',
+        'Output coefficient': '出力係数',
+        'Expected a JSON object of non-negative group coefficients': 'グループと非負の係数を対応付けた JSON オブジェクトを入力してください',
+    },
+    ru: {
+        'Input coefficient': 'Коэффициент ввода',
+        'Output coefficient': 'Коэффициент вывода',
+        'Expected a JSON object of non-negative group coefficients': 'Ожидается JSON-объект с группами и неотрицательными коэффициентами',
+    },
+    vi: {
+        'Input coefficient': 'Hệ số đầu vào',
+        'Output coefficient': 'Hệ số đầu ra',
+        'Expected a JSON object of non-negative group coefficients': 'Cần một đối tượng JSON ánh xạ nhóm tới hệ số không âm',
+    },
+}
+if (process.argv.includes('--group-token-ratios')) {
+    for (const [locale, labels] of Object.entries(groupTokenRatioLabels)) {
+        Object.assign(newKeys[locale], labels)
+    }
+    selectedKeys = new Set(Object.keys(groupTokenRatioLabels.en))
+}
+
 async function main() {
     let totalAdded = 0
 
@@ -476,9 +520,11 @@ async function main() {
         }
 
         if (count > 0) {
-            json.translation = Object.fromEntries(
-                Object.entries(json.translation).sort(([a], [b]) => a.localeCompare(b))
-            )
+            if (!process.argv.includes('--group-token-ratios')) {
+                json.translation = Object.fromEntries(
+                    Object.entries(json.translation).sort(([a], [b]) => a.localeCompare(b))
+                )
+            }
             await fs.writeFile(filePath, stableStringify(json), 'utf8')
         }
 

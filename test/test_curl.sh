@@ -1,13 +1,19 @@
-export NEW_API_KEY=sk-wJrAcW1MTlBgPHJkS3E1zomyFmqtefj6hVsDQflAtmpgvKn7
-export MODEL_NAME=Qwen3.8-27B
+python3 - <<'PY' | curl http://10.10.30.8:3000/v1/chat/completions \
+  -H "Authorization: Bearer sk-wJrAcW1MTlBgPHJkS3E1zomyFmqtefj6hVsDQflAtmpgvKn7" \
+  -H "Content-Type: application/json" \
+  --data-binary @-
+import json
 
-curl http://10.10.30.8:3002/v1/chat/completions   -H "Authorization: Bearer $NEW_API_KEY"   -H "Content-Type: application/json"   -d '{
-       "model": "$MODEL_NAME",
-       "messages": [
-         {
-           "role": "user",
-           "content": "Explain quantum entanglement in one paragraph."
-         }
-       ],
-       "temperature": 0.7
-     }'
+input_tokens = 1000   # 1000 / 10000 / 20000
+output_tokens = 1000 # 1000 / 10000 / 20000
+
+print(json.dumps({
+    "model": "Qwen3.8-27B",
+    "messages": [{
+        "role": "user11",
+        "content": "Explain quantum entanglement. Padding: " + "test " * input_tokens
+    }],
+    "temperature": 0.7,
+    "max_tokens": output_tokens
+}))
+PY

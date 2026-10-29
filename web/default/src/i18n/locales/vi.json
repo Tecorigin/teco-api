@@ -5447,7 +5447,10 @@
     "请选择或创建一个知识库": "Chọn hoặc tạo một kho tri thức",
     "输入问题，Enter 发送，Shift+Enter 换行": "Nhập câu hỏi. Enter để gửi, Shift+Enter để xuống dòng",
     "问答失败": "Hỏi đáp thất bại",
-    "问答接口返回 SSE。stream 为 true 时返回 OpenAI 风格的 chat.completion.chunk 事件；stream 为 false 时返回单个 OpenAI 风格 JSON 响应。return_docs 为 true 时会返回参考来源。": "Hỏi đáp trả về SSE. stream=true trả về sự kiện kiểu OpenAI, stream=false trả về JSON. return_docs=true gồm nguồn tham khảo."
+    "问答接口返回 SSE。stream 为 true 时返回 OpenAI 风格的 chat.completion.chunk 事件；stream 为 false 时返回单个 OpenAI 风格 JSON 响应。return_docs 为 true 时会返回参考来源。": "Hỏi đáp trả về SSE. stream=true trả về sự kiện kiểu OpenAI, stream=false trả về JSON. return_docs=true gồm nguồn tham khảo.",
+    "Input coefficient": "Hệ số đầu vào",
+    "Output coefficient": "Hệ số đầu ra",
+    "Expected a JSON object of non-negative group coefficients": "Cần một đối tượng JSON ánh xạ nhóm tới hệ số không âm"
   },
   "Model Usage Limits": "Model Usage Limits",
   "Configure per-user and per-model usage limits (daily/weekly/monthly) and view violation records.": "Configure per-user and per-model usage limits (daily/weekly/monthly) and view violation records.",

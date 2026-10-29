@@ -53,6 +53,7 @@ export interface CommonLogFilters extends CommonFilters {
   username?: string
   requestId?: string
   upstreamRequestId?: string
+  streamError?: string
 }
 
 /**
@@ -156,6 +157,8 @@ export interface LogOtherData {
   completion_ratio?: number
   model_price?: number
   group_ratio?: number
+  group_input_ratio?: number
+  group_output_ratio?: number
   user_group_ratio?: number
   cache_ratio?: number
   cache_creation_ratio?: number
@@ -163,6 +166,8 @@ export interface LogOtherData {
   cache_creation_ratio_1h?: number
   is_model_mapped?: boolean
   upstream_model_name?: string
+  upstream_request_id?: string
+  upstream_request_id_source?: string
   audio_ratio?: number
   audio_completion_ratio?: number
   frt?: number
@@ -302,6 +307,7 @@ export interface GetLogsParams {
   group?: string
   request_id?: string
   upstream_request_id?: string
+  stream_error?: number
 }
 
 export interface GetLogsResponse {
@@ -326,6 +332,7 @@ export interface GetLogStatsParams {
   group?: string
   request_id?: string
   upstream_request_id?: string
+  stream_error?: number
 }
 
 export interface GetLogStatsResponse {
