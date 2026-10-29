@@ -28,6 +28,8 @@ web/**/node_modules/
 plans
 .claude
 .cursor
+test_local/
+test/
 
 electron/node_modules
 electron/dist
